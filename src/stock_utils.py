@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import re
-from datetime import datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Iterable, Literal, Sequence
 
@@ -16,6 +16,15 @@ _DATE_RE = re.compile(r"(?<!\d)(20\d{6})(?!\d)")
 _SIX_DIGIT_RE = re.compile(r"(?<!\d)(\d{6})(?!\d)")
 
 CodeStyle = Literal["digits", "suffix", "baostock"]
+
+
+def previous_trading_day(reference: date | datetime | None = None) -> date:
+    """返回严格早于参考日期的最近工作日（周一至周五）。"""
+    current = reference.date() if isinstance(reference, datetime) else (reference or date.today())
+    candidate = current - timedelta(days=1)
+    while candidate.weekday() >= 5:
+        candidate -= timedelta(days=1)
+    return candidate
 
 
 def _code_digits(value) -> str:

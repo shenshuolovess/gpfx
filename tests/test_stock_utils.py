@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from datetime import date, datetime
 from pathlib import Path
 import sys
 
@@ -10,6 +11,7 @@ from stock_utils import (
     dated_output_path,
     latest_matching_file,
     normalize_code,
+    previous_trading_day,
     read_csv_auto,
 )
 
@@ -28,6 +30,11 @@ class NormalizeCodeTests(unittest.TestCase):
 
 
 class FileUtilityTests(unittest.TestCase):
+    def test_previous_trading_day_skips_weekend(self):
+        self.assertEqual(previous_trading_day(date(2026, 7, 20)), date(2026, 7, 17))
+        self.assertEqual(previous_trading_day(datetime(2026, 7, 18, 12, 0)), date(2026, 7, 17))
+        self.assertEqual(previous_trading_day(date(2026, 7, 17)), date(2026, 7, 16))
+
     def test_csv_encoding_detection(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "stocks.csv"

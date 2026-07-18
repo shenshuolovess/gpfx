@@ -12,7 +12,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 
 from pipeline_config import config_value, project_path
-from stock_utils import dated_output_path
+from stock_utils import dated_output_path, previous_trading_day
 
 
 DEFAULT_URL = "https://wx.zsxq.com/group/15555851111822"
@@ -46,8 +46,8 @@ parser = argparse.ArgumentParser(description="抓取知识星球文字观点")
 parser.add_argument("--url", default=DEFAULT_URL, help="知识星球页面地址")
 parser.add_argument(
     "--stop-date",
-    default=datetime.now().strftime("%Y-%m-%d"),
-    help="抓取截止日期 YYYY-MM-DD，默认今天",
+    default=previous_trading_day().strftime("%Y-%m-%d"),
+    help="抓取截止日期 YYYY-MM-DD，默认上一个交易日（按周一至周五回退）",
 )
 parser.add_argument("--output", help="输出文本文件；默认按当前日期命名")
 parser.add_argument(
@@ -69,6 +69,7 @@ parser.add_argument(
 args = parser.parse_args()
 
 STOP_DATE = datetime.strptime(args.stop_date, "%Y-%m-%d")
+print(f"本次抓取截止日期：{STOP_DATE:%Y-%m-%d}")
 OUTPUT_FILE = args.output or dated_output_path(
     project_path(config_value("files", "output_dir", "data/output")),
     "zsxq",

@@ -62,6 +62,11 @@ class WebConsoleTests(unittest.TestCase):
         ranking = dashboard_status()["files"]["ranking"]
         self.assertEqual(ranking["name"], "top200_stocks_20260720.xlsx")
 
+    def test_dashboard_includes_latest_zsxq_output(self):
+        zsxq = dashboard_status()["files"]["zsxq"]
+        self.assertTrue(zsxq["name"].startswith("zsxq_"))
+        self.assertTrue(zsxq["name"].endswith(".txt"))
+
     def test_progress_parser_supports_fraction_and_percent(self):
         self.assertEqual(parse_progress_line("[页面生成] 125/362 | 成功 124"), (125, 362))
         self.assertEqual(parse_progress_line("进度：78%"), (78, 100))

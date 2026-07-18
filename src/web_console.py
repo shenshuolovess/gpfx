@@ -278,6 +278,7 @@ def dashboard_status() -> dict[str, Any]:
     ranking_path = resolve_input(None, pattern_key="ranking_pattern")
     classification = latest_optional(str(config_value("files", "classification_pattern")))
     tags = latest_tag_file()
+    zsxq = latest_optional("data/output/zsxq_*.txt")
     research = latest_optional("data/history/research_reports/eastmoney_stock_reports_*.json")
     financial = latest_optional("data/history/company_financials/eastmoney_company_financials_*.json")
     try:
@@ -293,7 +294,8 @@ def dashboard_status() -> dict[str, Any]:
         "files": {
             "stock_pool": file_info(pool_path), "ranking": file_info(ranking_path),
             "classification": file_info(classification),
-            "tags": file_info(tags), "research": file_info(research), "financial": file_info(financial),
+            "tags": file_info(tags), "zsxq": file_info(zsxq),
+            "research": file_info(research), "financial": file_info(financial),
         },
     }
 

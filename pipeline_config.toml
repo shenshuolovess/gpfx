@@ -1,0 +1,31 @@
+[files]
+stock_pool = "data/input/沪深.csv"
+ranking_pattern = "data/input/top200_stocks_*.xlsx"
+classification_pattern = "data/output/沪深_分类总表_*.csv"
+standard_table = "data/input/标准表.xlsx"
+clearance_analysis = "data/input/清仓分析.xlsx"
+rating_cache_dir = "cache/baostock"
+history_dir = "data/history"
+output_dir = "data/output"
+target_output_dir = "data/output/计算标的"
+target_count_history = "data/output/计算标的数量历史.csv"
+classification_count_history = "data/output/分类数量历史.csv"
+hit_count_file = "data/output/命中次数统计.csv"
+chromedriver = "src/bin/chromedriver.exe"
+
+[rating]
+workers = 6
+
+[monitor]
+interval_seconds = 800
+headless = false
+
+[logging]
+directory = "data/output/logs"
+max_bytes = 5242880
+backup_count = 5
+
+[maintenance]
+cache_retention_days = 30
+cache_keep_per_code = 3
+log_retention_days = 30

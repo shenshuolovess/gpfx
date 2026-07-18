@@ -1,0 +1,9 @@
+# 候选配置仅用于实验，不会自动替换生产基线。
+# 未列出的阈值自动继承 classification_rules.CURRENT_RULES。
+
+[candidates.relaxed_rising]
+description = "探索性方案：适度放宽上升趋势门槛"
+rising_trend_min = 68
+rising_direction_min = 24
+rising_adx_min = 50
+rising_rs_min = 10

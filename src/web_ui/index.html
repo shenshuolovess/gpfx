@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>A股研究控制台</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    .manual-badge{position:relative;z-index:1;min-width:225px;padding:17px 19px;border-radius:14px;border:1px solid rgba(102,224,194,.24);background:rgba(5,24,30,.45)}
+    .manual-badge span,.manual-badge b,.manual-badge small{display:block}.manual-badge span{font-size:8px;letter-spacing:.2em;color:var(--mint)}
+    .manual-badge b{font-size:14px;margin:8px 0 5px}.manual-badge small{font-size:9px;color:var(--muted)}
+    .job-progress{margin:4px 0 13px;padding:12px;border-radius:10px;background:rgba(255,255,255,.025);border:1px solid var(--line)}
+    .progress-copy{display:flex;justify-content:space-between;gap:12px;margin-bottom:8px;font-size:9px;color:var(--muted)}.progress-copy b{color:var(--mint)}
+    .progress-track,.mini-track,.task-status>div{height:5px;border-radius:99px;background:#041016;overflow:hidden}.progress-track i,.mini-track i,.task-status i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--blue),var(--mint));transition:width .35s}
+    .moving{animation:moving-progress 1.15s ease-in-out infinite alternate}@keyframes moving-progress{from{transform:translateX(-70%)}to{transform:translateX(190%)}}
+    .mini-track{height:3px;margin-top:6px}.task-status{display:grid;grid-template-columns:1fr auto auto;gap:7px;margin-top:12px;font-size:8px;color:var(--muted);align-items:center}.task-status b{color:var(--mint)}.task-status>div{grid-column:1/-1;height:4px}.stop-mini{border:1px solid rgba(255,127,127,.25);background:rgba(255,127,127,.07);color:var(--red);border-radius:6px;padding:4px 7px;font-size:8px;cursor:pointer}.stop-mini:hover{background:rgba(255,127,127,.14)}
+    .file-grid{grid-template-columns:repeat(3,1fr)}
+    .preview-panel{padding-bottom:12px}.panel-head h3 small{color:var(--mint);font-size:10px;margin-left:7px}.table-tools{display:flex;gap:8px}.table-tools input{width:220px;border:1px solid var(--line);background:#071820;color:var(--text);border-radius:8px;padding:8px 10px;font-size:10px;outline:none}.table-tools input:focus{border-color:rgba(102,224,194,.4)}.table-note{font-size:9px;color:var(--muted);margin:-7px 0 12px}.table-wrap{max-height:520px;overflow:auto;border:1px solid var(--line);border-radius:11px}.table-wrap table{width:100%;border-collapse:collapse;white-space:nowrap;font-size:10px}.table-wrap th{position:sticky;top:0;z-index:1;background:#102a35;color:#8fa9ae;text-align:left;padding:10px;border-bottom:1px solid var(--line)}.table-wrap td{padding:9px 10px;border-bottom:1px solid rgba(173,215,219,.06);color:#c4d5d8}.table-wrap tbody tr:hover{background:rgba(102,224,194,.035)}
+    .target-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:12px}.count-card{padding:14px;border-radius:11px;background:rgba(255,255,255,.025);border:1px solid var(--line);color:var(--text);text-align:left;cursor:pointer;transition:.18s}.count-card:hover{border-color:rgba(102,224,194,.42);background:rgba(102,224,194,.055);transform:translateY(-1px)}.count-card span,.count-card b{display:block}.count-card span{font-size:9px;color:var(--muted)}.count-card b{font-size:24px;color:var(--mint);margin-top:7px}.target-history .table-wrap{max-height:260px}
+    .classification-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}.classification-summary .count-card{display:flex;justify-content:space-between;align-items:center;padding:11px 13px}.classification-summary .count-card b{font-size:17px;margin:0}.classification-history .table-wrap{max-height:280px}.count-link{border:0;background:transparent;color:var(--mint);padding:0;cursor:pointer;font:inherit;text-decoration:underline;text-decoration-color:rgba(102,224,194,.25);text-underline-offset:3px}.count-link:hover{color:#a5f5df}
+    .stock-modal{display:none;position:fixed;inset:0;background:rgba(2,10,15,.72);backdrop-filter:blur(5px);z-index:40;padding:5vh 4vw}.stock-modal.open{display:grid;place-items:center}.stock-dialog{width:min(1180px,100%);max-height:90vh;background:#091d27;border:1px solid rgba(102,224,194,.2);border-radius:18px;padding:22px;box-shadow:0 30px 90px rgba(0,0,0,.5)}.stock-dialog-head{display:flex;justify-content:space-between;align-items:start}.stock-dialog-head h3{margin:5px 0;font-size:20px}.stock-dialog-head span,.stock-list-meta{font-size:9px;color:var(--muted)}.stock-dialog-head button{border:0;background:transparent;color:var(--muted);font-size:25px;cursor:pointer}.stock-list-tools{display:flex;justify-content:space-between;align-items:center;margin:14px 0 10px}.stock-list-tools input{width:280px;border:1px solid var(--line);background:#06151d;color:var(--text);border-radius:8px;padding:9px 11px;font-size:10px}.stock-dialog .table-wrap{max-height:62vh}.sort-head{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;border:0;padding:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}.sort-head i{font-style:normal;font-size:8px;color:#58757d}.sort-head:hover,.sort-head.active{color:var(--mint)}.sort-head:hover i,.sort-head.active i{color:var(--mint)}
+    @media(max-width:700px){.manual-badge{margin-top:25px;width:100%}}
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><i>AX</i><div><strong>A股研究台</strong><span>LOCAL WORKSPACE</span></div></div>
+      <nav>
+        <button class="nav active" data-view="dashboard"><span>⌁</span>工作台</button>
+        <button class="nav" data-view="tasks"><span>▷</span>任务中心</button>
+        <button class="nav" data-view="outputs"><span>◇</span>研究结果</button>
+      </nav>
+      <div class="local-badge"><b></b><div><strong>本地模式</strong><span>数据不会上传云端</span></div></div>
+    </aside>
+
+    <main>
+      <header><div><p>RESEARCH OPERATIONS</p><h1>早上好，今天从哪里开始？</h1></div><div class="clock" id="clock"></div></header>
+
+      <section class="view active" id="dashboard-view">
+        <div class="hero">
+          <div><span class="kicker">DAILY WORKSPACE</span><h2>每天的研究任务，<br>按需要逐项执行。</h2><p>每项操作独立启动；完成并核对结果后，再决定是否运行下一项。</p></div>
+          <div class="manual-badge"><span>MANUAL CONTROL</span><b>独立执行模式</b><small>不会自动运行后续任务</small></div>
+        </div>
+
+        <div class="stats" id="stats"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
+
+        <div class="layout">
+          <section class="panel"><div class="panel-head"><div><span>QUICK ACTIONS</span><h3>常用操作</h3></div><button class="text-btn" data-view-link="tasks">全部任务 →</button></div><div class="quick-actions" id="quick-actions"></div></section>
+          <section class="panel activity"><div class="panel-head"><div><span>LIVE ACTIVITY</span><h3>最近任务</h3></div><i class="live-dot"></i></div><div id="recent-jobs" class="empty">还没有运行任务</div></section>
+        </div>
+
+        <section class="panel data-panel"><div class="panel-head"><div><span>DATA READINESS</span><h3>数据就绪情况</h3></div><button class="refresh" id="refresh">刷新</button></div><div class="file-grid" id="file-grid"></div></section>
+        <section class="panel target-history"><div class="panel-head"><div><span>TARGET COUNTS</span><h3>计算标的数量历史 <small id="target-date"></small></h3></div><button class="refresh" id="refresh-targets">刷新数据</button></div><div class="target-summary"><button class="count-card" onclick="openStockList('target','强势')"><span>强势</span><b id="strong-count">—</b></button><button class="count-card" onclick="openStockList('target','近期新高')"><span>近期新高</span><b id="recent-high-count">—</b></button><button class="count-card" onclick="openStockList('target','历史新高')"><span>历史新高</span><b id="history-high-count">—</b></button></div><div class="table-note" id="target-note"></div><div class="table-wrap"><table><thead><tr><th>日期</th><th>强势数量</th><th>近期新高数量</th><th>历史新高数量</th></tr></thead><tbody id="target-history-body"></tbody></table></div></section>
+        <section class="panel classification-history"><div class="panel-head"><div><span>CLASSIFICATION COUNTS</span><h3>九种分类数量历史 <small id="classification-date"></small></h3></div><button class="refresh" id="refresh-classifications">刷新数据</button></div><div class="classification-summary" id="classification-summary"></div><div class="table-note" id="classification-note"></div><div class="table-wrap"><table><thead id="classification-history-head"></thead><tbody id="classification-history-body"></tbody></table></div></section>
+        <section class="panel preview-panel"><div class="panel-head"><div><span>BELOW MA200</span><h3>低于200日线股票 <small id="below-count"></small></h3></div><div class="table-tools"><input id="below-search" type="search" placeholder="搜索代码、名称或行业"><button class="refresh" id="refresh-below">刷新数据</button></div></div><div class="table-note" id="below-note"></div><div class="table-wrap"><table id="below-table"><thead></thead><tbody></tbody></table></div></section>
+      </section>
+
+      <section class="view" id="tasks-view">
+        <div class="page-title"><div><span>TASK REGISTRY</span><h2>任务中心</h2><p>所有操作均来自固定白名单，不执行任意命令。</p></div></div>
+        <div id="task-groups"></div>
+      </section>
+
+      <section class="view" id="outputs-view">
+        <div class="page-title"><div><span>OUTPUT LIBRARY</span><h2>研究结果</h2><p>打开最新页面，或下载生成的 CSV 文件。</p></div></div>
+        <div class="output-grid" id="output-grid"></div>
+      </section>
+    </main>
+  </div>
+
+  <aside class="drawer" id="drawer">
+    <div class="drawer-head"><div><span id="job-state">运行中</span><h3 id="job-title">任务日志</h3></div><button id="close-drawer">×</button></div>
+    <div class="job-meta" id="job-meta"></div>
+    <div class="job-progress"><div class="progress-copy"><span id="progress-message">准备开始</span><b id="progress-value">0%</b></div><div class="progress-track"><i id="progress-bar"></i></div></div>
+    <pre id="job-log">等待日志输出……</pre>
+    <button class="danger" id="cancel-job">终止任务</button>
+  </aside>
+  <div class="toast" id="toast"></div>
+  <div class="stock-modal" id="stock-modal"><div class="stock-dialog"><div class="stock-dialog-head"><div><span>STOCK LIST</span><h3 id="stock-list-title">股票明细</h3><div id="stock-list-subtitle"></div></div><button id="close-stock-list">×</button></div><div class="stock-list-tools"><div class="stock-list-meta" id="stock-list-meta"></div><input id="stock-list-search" type="search" placeholder="搜索代码、名称或行业"></div><div class="table-wrap"><table id="stock-list-table"><thead></thead><tbody></tbody></table></div></div></div>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -9,6 +9,7 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
 
 from pipeline_config import config_value, project_path
 from stock_utils import dated_output_path
@@ -54,6 +55,17 @@ parser.add_argument(
     default=str(project_path(config_value("files", "chromedriver", "src/bin/chromedriver.exe"))),
     help="ChromeDriver 路径",
 )
+parser.add_argument(
+    "--auto-start",
+    action="store_true",
+    help="不等待命令行回车，登录后自动检测“文字观点”入口并继续（供 Web 控制台使用）",
+)
+parser.add_argument(
+    "--login-timeout",
+    type=int,
+    default=300,
+    help="自动等待登录的最长秒数，默认 300 秒",
+)
 args = parser.parse_args()
 
 STOP_DATE = datetime.strptime(args.stop_date, "%Y-%m-%d")
@@ -70,14 +82,23 @@ service = Service(args.driver)
 driver = webdriver.Chrome(service=service, options=options)
 driver.get(args.url)
 
+viewpoint_xpath = "//*[contains(text(),'文字观点')]"
+if args.auto_start:
+    print(f"浏览器已打开，请登录知识星球；最长等待 {args.login_timeout} 秒……")
+    try:
+        viewpoint = WebDriverWait(driver, args.login_timeout).until(
+            lambda current: current.find_element(By.XPATH, viewpoint_xpath)
+        )
+    except Exception:
+        driver.quit()
+        raise RuntimeError(f"等待登录超时（{args.login_timeout} 秒），未找到“文字观点”入口")
+else:
+    print("请登录知识星球，然后按回车继续...")
+    input()
+    viewpoint = driver.find_element(By.XPATH, viewpoint_xpath)
 
-print("请登录知识星球，然后按回车继续...")
-input()
-
-
-print("进入文字观点")
-
-driver.find_element(By.XPATH,"//*[contains(text(),'文字观点')]").click()
+print("已检测到登录，进入文字观点")
+viewpoint.click()
 
 time.sleep(5)
 

@@ -47,6 +47,7 @@ class TaskDefinition:
 
 TASKS: dict[str, TaskDefinition] = {
     "calculate_targets": TaskDefinition("计算标的", "从最新选股明细生成强势、近期新高和历史新高三类标的", "计算标的.py", "每日准备"),
+    "zsxq": TaskDefinition("拉取知识星球", "打开浏览器，登录后自动抓取截至当天的文字观点", "拉取知识星球.py", "每日准备", True, base_args=("--auto-start",)),
     "below_ma200": TaskDefinition("低于200日线", "读取最新选股明细，筛出位于200日均线下方的股票", "低于200日(新版).py", "每日准备"),
     "rating": TaskDefinition("综合评级", "更新行情并生成最新分类总表", "综合评级_安全缓存并发版(1).py", "核心分析", True, allowed={"workers": ("--workers", "int")}),
     "filter_ma20": TaskDefinition("20日均线附近", "筛选震荡上行、上升、赶顶且位于20日均线附近的股票", "filter_zd_up_ma20.py", "每日筛选"),

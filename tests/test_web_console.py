@@ -13,6 +13,12 @@ from web_console import (
 
 
 class WebConsoleTests(unittest.TestCase):
+    def test_zsxq_task_uses_noninteractive_web_mode(self):
+        task = TASKS["zsxq"]
+        self.assertEqual(task.script, "拉取知识星球.py")
+        self.assertTrue(task.network)
+        self.assertIn("--auto-start", task.base_args)
+
     def test_count_cards_can_resolve_stock_lists(self):
         target = stock_list_preview("target", "强势", "2026-07-20")
         classification = stock_list_preview("classification", "上升", "2026-07-17")

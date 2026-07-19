@@ -8,7 +8,8 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 from web_console import (
     JOB_LOG_DIR, TASKS, JobManager, below_ma200_preview,
     classification_count_history_preview, dashboard_status, latest_tag_file,
-    parse_progress_line, safe_task_args, stock_list_preview, subprocess_environment,
+    latest_zsxq_audio, parse_progress_line, safe_task_args,
+    stock_list_preview, subprocess_environment,
 )
 
 
@@ -18,6 +19,17 @@ class WebConsoleTests(unittest.TestCase):
         self.assertEqual(task.script, "拉取知识星球.py")
         self.assertTrue(task.network)
         self.assertIn("--auto-start", task.base_args)
+
+    def test_tts_task_and_audio_player_are_registered(self):
+        task = TASKS["tts"]
+        self.assertEqual(task.script, "转语音.py")
+        self.assertTrue(task.network)
+        audio = latest_zsxq_audio()
+        if audio:
+            self.assertTrue(audio.name.endswith(".mp3"))
+        self.assertIn("zsxq_audio", dashboard_status()["files"])
+        script = (PROJECT_ROOT / "src" / "web_ui" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("<audio controls", script)
 
     def test_count_cards_can_resolve_stock_lists(self):
         target = stock_list_preview("target", "强势", "2026-07-20")

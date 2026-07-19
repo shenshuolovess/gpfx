@@ -30,6 +30,7 @@ from typing import List, Tuple
 import edge_tts
 
 from pipeline_config import config_value, project_path
+from stock_utils import latest_matching_file
 
 # ===================== 可调参数区 =====================
 VOICE = "zh-CN-YunyangNeural"
@@ -275,14 +276,17 @@ async def main(txt_file: str) -> int:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("用法：python tts_longtext_to_mp3_fast.py <要转语音的txt文件路径>")
-        print(r"示例：python tts_longtext_to_mp3_fast.py D:\股票学习\script.txt")
-        sys.exit(1)
-
-    txt_path = sys.argv[1]
     try:
+        if len(sys.argv) >= 2:
+            txt_path = sys.argv[1]
+        else:
+            output_root = project_path(config_value("files", "output_dir", "data/output"))
+            txt_path = str(latest_matching_file(output_root, "zsxq_*.txt"))
+            print(f"未指定文本文件，自动选择最新知识星球文本：{txt_path}")
         sys.exit(asyncio.run(main(txt_path)))
+    except FileNotFoundError:
+        print("运行失败：未找到 data/output/zsxq_*.txt，请先执行“拉取知识星球”")
+        sys.exit(2)
     except Exception as e:
         print(f"运行失败：{e}")
         sys.exit(99)

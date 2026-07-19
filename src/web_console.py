@@ -48,6 +48,7 @@ class TaskDefinition:
 TASKS: dict[str, TaskDefinition] = {
     "calculate_targets": TaskDefinition("计算标的", "从最新选股明细生成强势、近期新高和历史新高三类标的", "计算标的.py", "每日准备"),
     "zsxq": TaskDefinition("拉取知识星球", "打开浏览器，登录后自动抓取上一个交易日的文字观点", "拉取知识星球.py", "每日准备", True, base_args=("--auto-start",)),
+    "tts": TaskDefinition("知识星球转语音", "自动选择最新知识星球文本，生成可在页面播放的语音", "转语音.py", "每日准备", True),
     "below_ma200": TaskDefinition("低于200日线", "读取最新选股明细，筛出位于200日均线下方的股票", "低于200日(新版).py", "每日准备"),
     "rating": TaskDefinition("综合评级", "更新行情并生成最新分类总表", "综合评级_安全缓存并发版(1).py", "核心分析", True, allowed={"workers": ("--workers", "int")}),
     "filter_ma20": TaskDefinition("20日均线附近", "筛选震荡上行、上升、赶顶且位于20日均线附近的股票", "filter_zd_up_ma20.py", "每日筛选"),
@@ -108,6 +109,8 @@ def update_progress(job: dict[str, Any], line: str) -> None:
     job["progress_message"] = line[-160:]
     if parsed:
         current, total = parsed
+        if job.get("progress_total") == total:
+            current = max(current, int(job.get("progress_current") or 0))
         job.update(
             progress_current=current,
             progress_total=total,
@@ -250,6 +253,10 @@ def latest_tag_file() -> Path | None:
     return max(candidates, key=lambda path: path.stat().st_mtime_ns) if candidates else None
 
 
+def latest_zsxq_audio() -> Path | None:
+    return latest_optional("data/output/output_full_*_zsxq_*.mp3")
+
+
 def file_info(path: Path | None) -> dict[str, Any]:
     if not path or not path.exists():
         return {"name": "尚未生成", "path": "", "modified": "", "size_mb": 0}
@@ -279,6 +286,7 @@ def dashboard_status() -> dict[str, Any]:
     classification = latest_optional(str(config_value("files", "classification_pattern")))
     tags = latest_tag_file()
     zsxq = latest_optional("data/output/zsxq_*.txt")
+    zsxq_audio = latest_zsxq_audio()
     research = latest_optional("data/history/research_reports/eastmoney_stock_reports_*.json")
     financial = latest_optional("data/history/company_financials/eastmoney_company_financials_*.json")
     try:
@@ -294,7 +302,7 @@ def dashboard_status() -> dict[str, Any]:
         "files": {
             "stock_pool": file_info(pool_path), "ranking": file_info(ranking_path),
             "classification": file_info(classification),
-            "tags": file_info(tags), "zsxq": file_info(zsxq),
+            "tags": file_info(tags), "zsxq": file_info(zsxq), "zsxq_audio": file_info(zsxq_audio),
             "research": file_info(research), "financial": file_info(financial),
         },
     }
@@ -311,6 +319,7 @@ def output_items() -> list[dict[str, Any]]:
         ("市场日报", latest_optional("data/output/daily_briefs/*.html")),
         ("分类总表", latest_optional(str(config_value("files", "classification_pattern")))),
         ("产业标签", latest_tag_file()),
+        ("知识星球语音", latest_zsxq_audio()),
         ("回测报告", latest_optional("data/output/分类历史回测_汇总_*.csv")),
     ]
     return [{"title": title, **file_info(path)} for title, path in locations if path and path.exists()]

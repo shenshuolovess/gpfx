@@ -90,6 +90,11 @@ class WebConsoleTests(unittest.TestCase):
         self.assertNotIn("daily-run", html)
         self.assertNotIn("dailyQueue", script)
 
+    def test_frontend_assets_are_cache_busted(self):
+        html = (PROJECT_ROOT / "src" / "web_ui" / "index.html").read_text(encoding="utf-8")
+        self.assertRegex(html, r"/app\.js\?v=[0-9-]+")
+        self.assertRegex(html, r"/styles\.css\?v=[0-9-]+")
+
     def test_task_registry_uses_python_scripts_without_shell_commands(self):
         self.assertEqual(next(iter(TASKS)), "calculate_targets")
         self.assertEqual(TASKS["calculate_targets"].script, "计算标的.py")

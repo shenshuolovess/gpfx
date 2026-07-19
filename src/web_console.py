@@ -63,6 +63,7 @@ TASKS: dict[str, TaskDefinition] = {
     "compare_rules": TaskDefinition("规则对比", "比较当前基线与候选分类规则", "compare_classification_rules.py", "规则验证", allowed={"max_stocks": ("--max-stocks", "int"), "snapshots": ("--snapshots", "int"), "step": ("--step", "positive_int"), "horizons": ("--horizons", "horizons")}),
     "opportunity": TaskDefinition("机会评分", "从最新分类总表生成透明机会评分榜单", "generate_opportunity_scores.py", "结果生成"),
     "opportunity_backtest": TaskDefinition("机会评分回测", "检验机会评分的同池分层排序能力", "backtest_opportunity_score.py", "规则验证", allowed={"max_stocks": ("--max-stocks", "int"), "snapshots": ("--snapshots", "int"), "step": ("--step", "positive_int"), "horizons": ("--horizons", "horizons")}),
+    "factor_validation": TaskDefinition("机会因子滚动验证", "比较趋势延续与回撤反弹，并按月只使用已知历史选择模型", "validate_opportunity_factors.py", "规则验证", allowed={"train_months": ("--train-months", "positive_int"), "min_train_snapshots": ("--min-train-snapshots", "positive_int"), "horizons": ("--horizons", "horizons")}),
     "history_backfill": TaskDefinition("历史数据补全", "从2021年起补全正式历史行情，支持断点续跑", "backfill_history.py", "数据更新", True, allowed={"force": ("--force", "bool")}),
     "history_audit": TaskDefinition("历史覆盖审计", "检查历史起止日期、缺口、校验和与回测可用截面", "history_coverage.py", "规则验证"),
     "maintenance": TaskDefinition("维护预览", "预览过期缓存和日志，不执行删除", "maintenance.py", "系统维护"),
@@ -334,6 +335,7 @@ def output_items() -> list[dict[str, Any]]:
         ("分类总表", latest_optional(str(config_value("files", "classification_pattern")))),
         ("机会评分", latest_optional("data/output/沪深_机会评分_*.csv")),
         ("机会评分回测", latest_optional("data/output/机会评分回测_排序质量_*.csv")),
+        ("机会因子滚动验证", latest_optional("data/output/机会因子滚动汇总_*.csv")),
         ("历史覆盖审计", latest_optional("data/output/历史覆盖审计_*.csv")),
         ("产业标签", latest_tag_file()),
         ("知识星球语音", latest_zsxq_audio()),
@@ -416,6 +418,67 @@ def opportunity_score_preview() -> dict[str, Any]:
         "file": file_info(path), "columns": columns,
         "rows": frame[columns].astype(str).to_dict(orient="records"),
         "total": len(frame),
+    }
+
+
+def opportunity_factor_preview() -> dict[str, Any]:
+    summary_path = latest_optional("data/output/机会因子滚动汇总_*.csv")
+    monthly_path = latest_optional("data/output/机会因子滚动月度_*.csv")
+    if not summary_path or not monthly_path:
+        return {
+            "summary_file": file_info(None), "monthly_file": file_info(None),
+            "summary_rows": [], "monthly_rows": [], "summary_columns": [],
+            "monthly_columns": [], "statistics": {},
+        }
+    summary = read_csv_auto(summary_path, dtype=str).fillna("")
+    monthly = read_csv_auto(monthly_path, dtype=str).fillna("")
+    for column in ["平均月度IC"]:
+        if column in summary:
+            summary[column] = pd.to_numeric(summary[column], errors="coerce").map(
+                lambda value: f"{value:+.4f}" if pd.notna(value) else "—"
+            )
+    for column in ["IC为正月份比例", "Q5跑赢Q1月份比例"]:
+        if column in summary:
+            summary[column] = pd.to_numeric(summary[column], errors="coerce").map(
+                lambda value: f"{value:.2%}" if pd.notna(value) else "—"
+            )
+    if "平均月度Q5减Q1" in summary:
+        summary["平均月度Q5减Q1"] = pd.to_numeric(
+            summary["平均月度Q5减Q1"], errors="coerce"
+        ).map(lambda value: f"{value:+.2%}" if pd.notna(value) else "—")
+    for column in ["趋势延续训练IC", "回撤反弹训练IC", "动态验证IC"]:
+        if column in monthly:
+            monthly[column] = pd.to_numeric(monthly[column], errors="coerce").map(
+                lambda value: f"{value:+.4f}" if pd.notna(value) else "—"
+            )
+    if "动态验证Q5减Q1" in monthly:
+        monthly["动态验证Q5减Q1"] = pd.to_numeric(
+            monthly["动态验证Q5减Q1"], errors="coerce"
+        ).map(lambda value: f"{value:+.2%}" if pd.notna(value) else "—")
+    summary_columns = [column for column in [
+        "周期", "验证方式", "覆盖月份数", "平均月度IC", "IC为正月份比例",
+        "平均月度Q5减Q1", "Q5跑赢Q1月份比例", "结论",
+    ] if column in summary]
+    monthly_columns = [column for column in [
+        "验证月份", "周期", "选择模型", "趋势延续训练IC", "回撤反弹训练IC",
+        "动态验证IC", "动态验证Q5减Q1", "动态验证截面数", "选择原因", "信息截止",
+    ] if column in monthly]
+    passed = summary["结论"].eq("初步通过滚动验证") if "结论" in summary else pd.Series(dtype=bool)
+    selections = monthly["选择模型"].value_counts().to_dict() if "选择模型" in monthly else {}
+    return {
+        "summary_file": file_info(summary_path), "monthly_file": file_info(monthly_path),
+        "summary_columns": summary_columns,
+        "summary_rows": summary[summary_columns].astype(str).to_dict(orient="records"),
+        "monthly_columns": monthly_columns,
+        "monthly_rows": monthly[monthly_columns].astype(str).to_dict(orient="records"),
+        "statistics": {
+            "passed_rows": int(passed.sum()), "total_rows": len(summary),
+            "months": int(monthly["验证月份"].nunique()) if "验证月份" in monthly else 0,
+            "rebound_selections": int(selections.get("回撤反弹", 0)),
+            "trend_selections": int(selections.get("趋势延续", 0)),
+            "abstentions": int(selections.get("不启用", 0)),
+        },
+        "warning": "研究候选：模型假设是在观察旧评分失败后提出，且使用当前股票池，不能视为独立样本实盘结论。",
     }
 
 
@@ -590,7 +653,7 @@ async def disable_ui_cache(request, call_next):
     response = await call_next(request)
     if request.url.path in {
         "/", "/index.html", "/app.js", "/styles.css", "/migration.js",
-        "/migration.css", "/opportunity.js", "/history.js"
+        "/migration.css", "/opportunity.js", "/factor-validation.js", "/history.js"
     }:
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
@@ -655,6 +718,11 @@ def api_nearby_ma_preview(period: int):
 @app.get("/api/previews/opportunity-scores")
 def api_opportunity_score_preview():
     return opportunity_score_preview()
+
+
+@app.get("/api/previews/opportunity-factors")
+def api_opportunity_factor_preview():
+    return opportunity_factor_preview()
 
 
 @app.get("/api/previews/history-coverage")

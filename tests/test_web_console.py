@@ -12,6 +12,7 @@ from web_console import (
     stock_list_preview, subprocess_environment, rule_comparison_preview,
     opportunity_score_preview,
     history_coverage_preview,
+    opportunity_factor_preview,
 )
 
 
@@ -31,6 +32,16 @@ class WebConsoleTests(unittest.TestCase):
         self.assertEqual(preview["total"], 303)
         self.assertIn("median_trading_days", preview["summary"])
         self.assertIn("60日非重叠截面", preview["columns"])
+
+    def test_factor_walk_forward_task_and_preview_are_registered(self):
+        task = TASKS["factor_validation"]
+        self.assertEqual(task.script, "validate_opportunity_factors.py")
+        self.assertIn("train_months", task.allowed)
+        preview = opportunity_factor_preview()
+        self.assertGreater(preview["statistics"]["months"], 0)
+        self.assertIn("平均月度IC", preview["summary_columns"])
+        self.assertIn("选择模型", preview["monthly_columns"])
+        self.assertIn("研究候选", preview["warning"])
 
     def test_zsxq_task_uses_noninteractive_web_mode(self):
         task = TASKS["zsxq"]

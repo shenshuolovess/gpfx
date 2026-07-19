@@ -11,6 +11,9 @@ from backtest_opportunity_score import add_scores_and_buckets, summarize_ranking
 from opportunity_score import (
     OpportunityConfig, add_opportunity_scores, opportunity_output, score_opportunity,
 )
+from validate_opportunity_factors import (
+    add_minimal_model_scores, rolling_monthly_validation, summarize_rolling,
+)
 
 
 def signal_row(**overrides):
@@ -90,6 +93,52 @@ class OpportunityScoreTests(unittest.TestCase):
         self.assertEqual(set(scored["机会分层"]), set(["Q1偏低", "Q2", "Q3", "Q4", "Q5偏高"]))
         quality = summarize_ranking_quality(scored, [5])
         self.assertGreater(quality[quality["样本区间"] == "总体"].iloc[0]["平均秩相关IC"], 0)
+
+
+class OpportunityFactorValidationTests(unittest.TestCase):
+    def test_minimal_models_have_explicit_opposite_hypotheses(self):
+        rows = []
+        for index in range(10):
+            rows.append({
+                "回测截面日": "2026-01-01",
+                "trend_score": index * 10,
+                "rs_score": index * 10,
+                "breakout_score": index * 10,
+                "position_score": index * 10,
+                "base_score": 90 - index * 10,
+            })
+        scored = add_minimal_model_scores(pd.DataFrame(rows))
+        self.assertGreater(scored.iloc[-1]["趋势延续"], scored.iloc[0]["趋势延续"])
+        self.assertLess(scored.iloc[-1]["回撤反弹"], scored.iloc[0]["回撤反弹"])
+
+    def test_rolling_selection_uses_only_prior_window_and_can_abstain(self):
+        rows = []
+        months = pd.date_range("2024-01-01", periods=10, freq="MS")
+        for index, date in enumerate(months):
+            for model, ic in (("趋势延续", .10), ("回撤反弹", -.10)):
+                rows.append({
+                    "回测截面日": date.strftime("%Y-%m-%d"),
+                    "月份": date.strftime("%Y-%m"), "样本区间": "测试",
+                    "周期": "5日", "模型": model,
+                    "秩相关IC": -.90 if index == 9 and model == "趋势延续" else ic,
+                    "Q5减Q1同池超额": .01 if model == "趋势延续" else -.01,
+                    "截面股票数": 100,
+                })
+        monthly = rolling_monthly_validation(
+            pd.DataFrame(rows), train_months=4, min_train_snapshots=3,
+        )
+        last = monthly.iloc[-1]
+        self.assertEqual(last["选择模型"], "趋势延续")
+        self.assertGreater(last["趋势延续训练IC"], 0)
+        self.assertEqual(last["趋势延续验证IC"], -.90)
+
+        negative = pd.DataFrame(rows)
+        negative["秩相关IC"] = -.10
+        abstained = rolling_monthly_validation(negative, train_months=4, min_train_snapshots=3)
+        self.assertTrue((abstained["选择模型"] == "不启用").all())
+        summary = summarize_rolling(abstained)
+        dynamic = summary[summary["验证方式"] == "月度动态选择"]
+        self.assertTrue((dynamic["覆盖月份数"] == 0).all())
 
 
 if __name__ == "__main__":

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>A股研究控制台</title>
-  <link rel="stylesheet" href="/styles.css?v=20260719-4">
+  <link rel="stylesheet" href="/styles.css?v=20260719-5">
   <style>
     .manual-badge{position:relative;z-index:1;min-width:225px;padding:17px 19px;border-radius:14px;border:1px solid rgba(102,224,194,.24);background:rgba(5,24,30,.45)}
     .manual-badge span,.manual-badge b,.manual-badge small{display:block}.manual-badge span{font-size:8px;letter-spacing:.2em;color:var(--mint)}
@@ -21,7 +21,9 @@
     .stock-modal{display:none;position:fixed;inset:0;background:rgba(2,10,15,.72);backdrop-filter:blur(5px);z-index:40;padding:5vh 4vw}.stock-modal.open{display:grid;place-items:center}.stock-dialog{width:min(1180px,100%);max-height:90vh;background:#091d27;border:1px solid rgba(102,224,194,.2);border-radius:18px;padding:22px;box-shadow:0 30px 90px rgba(0,0,0,.5)}.stock-dialog-head{display:flex;justify-content:space-between;align-items:start}.stock-dialog-head h3{margin:5px 0;font-size:20px}.stock-dialog-head span,.stock-list-meta{font-size:9px;color:var(--muted)}.stock-dialog-head button{border:0;background:transparent;color:var(--muted);font-size:25px;cursor:pointer}.stock-list-tools{display:flex;justify-content:space-between;align-items:center;margin:14px 0 10px}.stock-list-tools input{width:280px;border:1px solid var(--line);background:#06151d;color:var(--text);border-radius:8px;padding:9px 11px;font-size:10px}.stock-dialog .table-wrap{max-height:62vh}.sort-head{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;border:0;padding:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}.sort-head i{font-style:normal;font-size:8px;color:#58757d}.sort-head:hover,.sort-head.active{color:var(--mint)}.sort-head:hover i,.sort-head.active i{color:var(--mint)}
     .audio-card{display:grid;grid-template-columns:minmax(180px,1fr) minmax(260px,2fr) auto;align-items:center;gap:18px;padding:16px;border:1px solid var(--line);background:rgba(255,255,255,.018);border-radius:12px}.audio-card span,.audio-card b,.audio-card small{display:block}.audio-card span{font-size:8px;color:var(--mint);letter-spacing:.14em}.audio-card b{font-size:11px;margin:6px 0;overflow-wrap:anywhere}.audio-card small{font-size:8px;color:var(--muted)}.audio-card audio{width:100%;height:38px}.audio-card a{font-size:9px;color:var(--mint);text-decoration:none;white-space:nowrap}.audio-output .audio-card{grid-template-columns:1fr;padding:0;border:0;background:transparent}.audio-output .audio-card>div>span{display:none}.audio-panel{background:linear-gradient(120deg,rgba(12,32,43,.9),rgba(20,52,58,.72))}
     .task-card input[type=text]{width:82px;border:1px solid var(--line);background:#081923;color:var(--text);padding:6px;border-radius:6px;font-size:9px}.task-card footer{flex-wrap:wrap}
-    @media(max-width:700px){.manual-badge{margin-top:25px;width:100%}.audio-card{grid-template-columns:1fr}}
+    .rule-hero{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.rule-stat{padding:16px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.02)}.rule-stat span,.rule-stat b,.rule-stat small{display:block}.rule-stat span{font-size:8px;color:var(--muted)}.rule-stat b{font-size:20px;color:var(--mint);margin:8px 0 4px}.rule-stat small{font-size:8px;color:#68848b}.rule-controls{display:flex;align-items:center;gap:10px}.rule-controls select{border:1px solid var(--line);background:#071820;color:var(--text);border-radius:8px;padding:8px 10px;font-size:10px}.rule-cards{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.rule-card{padding:17px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.018)}.rule-card header{margin:0 0 12px}.rule-card h4{font-size:13px;margin:4px 0}.rule-card p{font-size:9px;color:var(--muted);margin:0}.rule-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.rule-metrics div{padding:10px;background:#071820;border-radius:9px}.rule-metrics span,.rule-metrics b{display:block}.rule-metrics span{font-size:8px;color:var(--muted)}.rule-metrics b{font-size:13px;margin-top:5px}.quality-high{color:var(--mint)}.quality-medium{color:var(--amber)}.quality-low{color:var(--red)}.compare-cell b,.compare-cell small{display:block}.compare-cell small{font-size:8px;color:var(--muted);margin-top:3px}.comparison-empty{padding:55px 15px;text-align:center;color:var(--muted)}.download-links{display:flex;gap:8px;flex-wrap:wrap}.download-links a{color:var(--mint);font-size:9px;text-decoration:none;padding:7px 9px;border:1px solid var(--line);border-radius:7px}
+    @media(max-width:900px){.rule-hero{grid-template-columns:repeat(2,1fr)}.rule-cards{grid-template-columns:1fr}}
+    @media(max-width:700px){.manual-badge{margin-top:25px;width:100%}.audio-card{grid-template-columns:1fr}.rule-hero{grid-template-columns:1fr}.rule-controls{align-items:stretch;flex-direction:column}.rule-metrics{grid-template-columns:1fr}}
   </style>
 </head>
 <body>
@@ -31,6 +33,7 @@
       <nav>
         <button class="nav active" data-view="dashboard"><span>⌁</span>工作台</button>
         <button class="nav" data-view="tasks"><span>▷</span>任务中心</button>
+        <button class="nav" data-view="rules"><span>⌬</span>规则对比</button>
         <button class="nav" data-view="outputs"><span>◇</span>研究结果</button>
       </nav>
       <div class="local-badge"><b></b><div><strong>本地模式</strong><span>数据不会上传云端</span></div></div>
@@ -66,6 +69,14 @@
         <div id="task-groups"></div>
       </section>
 
+      <section class="view" id="rules-view">
+        <div class="page-title"><div><span>RULE LAB</span><h2>分类规则版本对比</h2><p>基线与候选规则使用完全相同的股票、历史截面和未来收益窗口。</p></div></div>
+        <section class="panel"><div class="panel-head"><div><span>LATEST EXPERIMENT</span><h3>最近一次对比实验</h3></div><div class="rule-controls"><select id="rule-period"></select><select id="rule-horizon"></select><button class="refresh" id="refresh-rules">刷新结果</button><button class="text-btn" data-view-link="tasks">运行新对比 →</button></div></div><div class="rule-hero" id="rule-summary"></div><div class="table-note" id="rule-note"></div></section>
+        <section class="panel"><div class="panel-head"><div><span>STABILITY</span><h3>规则稳定性</h3></div></div><div class="rule-cards" id="rule-stability"></div></section>
+        <section class="panel"><div class="panel-head"><div><span>SAME-POOL PERFORMANCE</span><h3>各分类并排表现</h3></div></div><div class="table-note">核心比较同一截面股票池内的相对收益；数值为正才表示该分类跑赢当时股票池。</div><div class="table-wrap"><table id="rule-performance"><thead></thead><tbody></tbody></table></div></section>
+        <section class="panel"><div class="panel-head"><div><span>FILES</span><h3>实验文件</h3></div></div><div class="download-links" id="rule-downloads"></div></section>
+      </section>
+
       <section class="view" id="outputs-view">
         <div class="page-title"><div><span>OUTPUT LIBRARY</span><h2>研究结果</h2><p>打开最新页面，或下载生成的 CSV 文件。</p></div></div>
         <div class="output-grid" id="output-grid"></div>
@@ -82,6 +93,6 @@
   </aside>
   <div class="toast" id="toast"></div>
   <div class="stock-modal" id="stock-modal"><div class="stock-dialog"><div class="stock-dialog-head"><div><span>STOCK LIST</span><h3 id="stock-list-title">股票明细</h3><div id="stock-list-subtitle"></div></div><button id="close-stock-list">×</button></div><div class="stock-list-tools"><div class="stock-list-meta" id="stock-list-meta"></div><input id="stock-list-search" type="search" placeholder="搜索代码、名称或行业"></div><div class="table-wrap"><table id="stock-list-table"><thead></thead><tbody></tbody></table></div></div></div>
-  <script src="/app.js?v=20260719-4"></script>
+  <script src="/app.js?v=20260719-5"></script>
 </body>
 </html>

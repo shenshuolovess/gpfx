@@ -14,11 +14,15 @@ import numpy as np
 import pandas as pd
 
 from backtest_classification import (
+    add_pool_relative_returns,
     benchmark_forward_returns,
     choose_snapshot_dates,
     load_rating_module,
     parse_horizons,
     prepare_scored_history,
+    quality_assessment,
+    stock_contribution_ratio,
+    trimmed_mean,
 )
 from classification_rules import (
     CURRENT_RULES,
@@ -91,6 +95,19 @@ def bootstrap_mean_ci(
     indices = rng.integers(0, len(numbers), size=(iterations, len(numbers)))
     means = numbers[indices].mean(axis=1)
     return float(np.quantile(means, 0.025)), float(np.quantile(means, 0.975))
+
+
+def bootstrap_snapshot_mean_ci(
+    subset: pd.DataFrame,
+    value_column: str,
+    *,
+    iterations: int,
+    rng: np.random.Generator,
+) -> tuple[float, float]:
+    """按截面而非单只股票重采样，避免夸大同日样本的独立性。"""
+    values = pd.to_numeric(subset[value_column], errors="coerce")
+    snapshot_means = values.groupby(subset["回测截面日"]).mean().dropna()
+    return bootstrap_mean_ci(snapshot_means, iterations=iterations, rng=rng)
 
 
 def _sample_codes(codes: list[str], max_stocks: int) -> list[str]:
@@ -202,7 +219,7 @@ def build_comparison_samples(
     detail = pd.DataFrame(records)
     if detail.empty:
         raise RuntimeError("没有生成规则比较样本，请检查历史覆盖和参数")
-    return detail, stats, snapshot_dates
+    return add_pool_relative_returns(detail, horizons), stats, snapshot_dates
 
 
 def to_long_labels(detail: pd.DataFrame, rules: dict[str, RuleConfig]) -> pd.DataFrame:
@@ -226,6 +243,7 @@ def summarize_performance(
     min_samples: int,
     bootstrap_iterations: int,
     seed: int,
+    step: int = 5,
 ) -> pd.DataFrame:
     rng = np.random.default_rng(seed)
     rows = []
@@ -237,11 +255,38 @@ def summarize_performance(
             for horizon in horizons:
                 returns = pd.to_numeric(subset[f"未来{horizon}日收益"], errors="coerce").dropna()
                 excess = pd.to_numeric(subset[f"未来{horizon}日超额"], errors="coerce").dropna()
+                pool_excess_column = f"未来{horizon}日同池超额"
+                pool_excess = pd.to_numeric(subset[pool_excess_column], errors="coerce").dropna()
                 drawdown = pd.to_numeric(
                     subset[f"未来{horizon}日最大回撤"], errors="coerce"
                 ).dropna()
-                ci_low, ci_high = bootstrap_mean_ci(
-                    excess, iterations=bootstrap_iterations, rng=rng
+                ci_low, ci_high = bootstrap_snapshot_mean_ci(
+                    subset,
+                    pool_excess_column,
+                    iterations=bootstrap_iterations,
+                    rng=rng,
+                )
+                sample_count = int(len(returns))
+                stock_count = int(subset.loc[returns.index, "代码"].nunique()) if sample_count else 0
+                date_count = int(subset.loc[returns.index, "回测截面日"].nunique()) if sample_count else 0
+                mean_return = returns.mean() if sample_count else np.nan
+                median_return = returns.median() if sample_count else np.nan
+                contribution = stock_contribution_ratio(
+                    subset.loc[returns.index], pool_excess_column
+                )
+                quality, quality_note = quality_assessment(
+                    samples=sample_count,
+                    stocks=stock_count,
+                    dates=date_count,
+                    contribution=contribution,
+                    mean_return=mean_return,
+                    median_return=median_return,
+                    overlapping=step < horizon,
+                )
+                significance = (
+                    "同池超额显著为正" if pd.notna(ci_low) and ci_low > 0
+                    else "同池超额显著为负" if pd.notna(ci_high) and ci_high < 0
+                    else "同池超额尚不显著"
                 )
                 rows.append(
                     {
@@ -249,17 +294,28 @@ def summarize_performance(
                         "规则": rule_name,
                         "分类": label,
                         "周期": f"{horizon}日",
-                        "样本数": int(len(returns)),
-                        "样本充足": len(returns) >= min_samples,
-                        "平均收益": returns.mean() if len(returns) else np.nan,
-                        "中位收益": returns.median() if len(returns) else np.nan,
+                        "截面间隔": step,
+                        "样本数": sample_count,
+                        "不同股票数": stock_count,
+                        "覆盖截面数": date_count,
+                        "样本充足": sample_count >= min_samples,
+                        "平均收益": mean_return,
+                        "中位收益": median_return,
+                        "10%截尾均值": trimmed_mean(returns),
                         "上涨胜率": (returns > 0).mean() if len(returns) else np.nan,
                         "平均超额": excess.mean() if len(excess) else np.nan,
                         "中位超额": excess.median() if len(excess) else np.nan,
                         "跑赢基准率": (excess > 0).mean() if len(excess) else np.nan,
+                        "平均同池超额": pool_excess.mean() if len(pool_excess) else np.nan,
+                        "跑赢同池率": (pool_excess > 0).mean() if len(pool_excess) else np.nan,
                         "平均信号期最大回撤": drawdown.mean() if len(drawdown) else np.nan,
-                        "平均超额95%CI下限": ci_low,
-                        "平均超额95%CI上限": ci_high,
+                        "同池超额95%CI下限": ci_low,
+                        "同池超额95%CI上限": ci_high,
+                        "统计结论": significance,
+                        "最大单股绝对贡献占比": contribution,
+                        "窗口是否重叠": "是" if step < horizon else "否",
+                        "可信度": quality,
+                        "数据质量提示": quality_note,
                     }
                 )
     return pd.DataFrame(rows)
@@ -314,6 +370,8 @@ def build_baseline_deltas(performance: pd.DataFrame) -> pd.DataFrame:
         "平均超额",
         "中位超额",
         "跑赢基准率",
+        "平均同池超额",
+        "跑赢同池率",
         "平均信号期最大回撤",
     ]
     baseline = performance[performance["规则"] == "baseline"][keys + metrics]
@@ -417,6 +475,7 @@ def main(argv=None) -> int:
         min_samples=args.min_samples,
         bootstrap_iterations=args.bootstrap_iterations,
         seed=args.seed,
+        step=args.step,
     )
     coverage = summarize_coverage(long_detail)
     stability = summarize_stability(long_detail)
@@ -452,6 +511,9 @@ def main(argv=None) -> int:
         "config_file": str(project_path(args.config)),
         "snapshot_dates": snapshot_dates,
         "horizons": args.horizons,
+        "step": args.step,
+        "snapshots_requested": args.snapshots,
+        "max_stocks": args.max_stocks,
         "statistics": stats,
         "rules": {
             name: {

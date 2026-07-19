@@ -419,6 +419,71 @@ def classification_count_history_preview() -> dict[str, Any]:
     }
 
 
+def _json_safe_records(frame: pd.DataFrame) -> list[dict[str, Any]]:
+    clean = frame.astype(object).where(pd.notna(frame), None)
+    return clean.to_dict(orient="records")
+
+
+def _comparison_output_path(metadata: dict[str, Any], label: str) -> Path | None:
+    raw = metadata.get("outputs", {}).get(label)
+    if not raw:
+        return None
+    path = Path(raw).resolve()
+    output_root = OUTPUT_DIR.resolve()
+    if path != output_root and output_root not in path.parents:
+        return None
+    return path if path.is_file() else None
+
+
+def rule_comparison_preview() -> dict[str, Any]:
+    """读取同一次规则实验的元数据和结果，避免混用不同时间戳文件。"""
+    metadata_path = latest_optional("data/output/分类规则对比_元数据_*.json")
+    if not metadata_path:
+        return {"available": False, "metadata_file": file_info(None)}
+    try:
+        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ValueError(f"规则对比元数据无法读取：{exc}") from exc
+
+    frames: dict[str, pd.DataFrame] = {}
+    for label in ("表现", "稳定性", "基线差异", "覆盖率"):
+        path = _comparison_output_path(metadata, label)
+        frames[label] = read_csv_auto(path) if path else pd.DataFrame()
+
+    performance = frames["表现"]
+    deltas = frames["基线差异"]
+    rules = [
+        {
+            "name": name,
+            "description": values.get("description", name),
+            "sha256": values.get("sha256", ""),
+        }
+        for name, values in metadata.get("rules", {}).items()
+    ]
+    outputs = {
+        label: file_info(_comparison_output_path(metadata, label))
+        for label in metadata.get("outputs", {})
+    }
+    return {
+        "available": True,
+        "metadata_file": file_info(metadata_path),
+        "created_at": metadata.get("created_at", ""),
+        "snapshot_dates": metadata.get("snapshot_dates", []),
+        "snapshot_count": len(metadata.get("snapshot_dates", [])),
+        "horizons": metadata.get("horizons", []),
+        "periods": performance["样本区间"].dropna().drop_duplicates().tolist()
+        if "样本区间" in performance else [],
+        "step": metadata.get("step"),
+        "statistics": metadata.get("statistics", {}),
+        "rules": rules,
+        "performance": _json_safe_records(performance),
+        "stability": _json_safe_records(frames["稳定性"]),
+        "deltas": _json_safe_records(deltas),
+        "coverage": _json_safe_records(frames["覆盖率"]),
+        "outputs": outputs,
+    }
+
+
 def stock_list_preview(source: str, category: str, date: str) -> dict[str, Any]:
     date_tag = str(date).replace("-", "")
     if not re.fullmatch(r"20\d{6}", date_tag):
@@ -528,6 +593,14 @@ def api_target_count_history_preview():
 @app.get("/api/previews/classification-count-history")
 def api_classification_count_history_preview():
     return classification_count_history_preview()
+
+
+@app.get("/api/previews/rule-comparison")
+def api_rule_comparison_preview():
+    try:
+        return rule_comparison_preview()
+    except ValueError as exc:
+        raise HTTPException(500, str(exc)) from exc
 
 
 @app.get("/api/previews/stocks")

@@ -9,7 +9,7 @@ from web_console import (
     JOB_LOG_DIR, TASKS, JobManager, below_ma200_preview,
     classification_count_history_preview, dashboard_status, latest_tag_file,
     latest_zsxq_audio, nearby_ma_preview, parse_progress_line, safe_task_args,
-    stock_list_preview, subprocess_environment,
+    stock_list_preview, subprocess_environment, rule_comparison_preview,
 )
 
 
@@ -146,6 +146,14 @@ class WebConsoleTests(unittest.TestCase):
         path = latest_tag_file()
         if path:
             self.assertNotIn("审计", path.name)
+
+    def test_rule_comparison_preview_has_stable_shape(self):
+        preview = rule_comparison_preview()
+        self.assertIn("available", preview)
+        if preview["available"]:
+            self.assertIn("performance", preview)
+            self.assertIn("stability", preview)
+            self.assertGreaterEqual(len(preview["rules"]), 2)
 
 
 if __name__ == "__main__":

@@ -8,7 +8,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "src"))
 from web_console import (
     JOB_LOG_DIR, TASKS, JobManager, below_ma200_preview,
     classification_count_history_preview, dashboard_status, latest_tag_file,
-    latest_zsxq_audio, parse_progress_line, safe_task_args,
+    latest_zsxq_audio, nearby_ma_preview, parse_progress_line, safe_task_args,
     stock_list_preview, subprocess_environment,
 )
 
@@ -64,6 +64,17 @@ class WebConsoleTests(unittest.TestCase):
         self.assertIn("代码", preview["columns"])
         self.assertIn("名称", preview["columns"])
         self.assertEqual(len(preview["rows"]), preview["total"])
+
+    def test_nearby_ma_previews_use_latest_outputs(self):
+        for period in (20, 200):
+            preview = nearby_ma_preview(period)
+            self.assertTrue(preview["file"]["path"])
+            self.assertGreaterEqual(preview["total"], 0)
+            self.assertIn("代码", preview["columns"])
+            self.assertIn("名称", preview["columns"])
+            self.assertIn(f"_{period}日均线附近_", preview["file"]["name"])
+        with self.assertRaises(ValueError):
+            nearby_ma_preview(60)
 
     def test_subprocess_output_is_forced_to_utf8(self):
         environment = subprocess_environment()

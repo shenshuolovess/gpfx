@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>A股研究控制台</title>
-  <link rel="stylesheet" href="/styles.css?v=20260719-1">
+  <link rel="stylesheet" href="/styles.css?v=20260719-3">
   <style>
     .manual-badge{position:relative;z-index:1;min-width:225px;padding:17px 19px;border-radius:14px;border:1px solid rgba(102,224,194,.24);background:rgba(5,24,30,.45)}
     .manual-badge span,.manual-badge b,.manual-badge small{display:block}.manual-badge span{font-size:8px;letter-spacing:.2em;color:var(--mint)}
@@ -56,6 +56,8 @@
         <section class="panel target-history"><div class="panel-head"><div><span>TARGET COUNTS</span><h3>计算标的数量历史 <small id="target-date"></small></h3></div><button class="refresh" id="refresh-targets">刷新数据</button></div><div class="target-summary"><button class="count-card" onclick="openStockList('target','强势')"><span>强势</span><b id="strong-count">—</b></button><button class="count-card" onclick="openStockList('target','近期新高')"><span>近期新高</span><b id="recent-high-count">—</b></button><button class="count-card" onclick="openStockList('target','历史新高')"><span>历史新高</span><b id="history-high-count">—</b></button></div><div class="table-note" id="target-note"></div><div class="table-wrap"><table><thead><tr><th>日期</th><th>强势数量</th><th>近期新高数量</th><th>历史新高数量</th></tr></thead><tbody id="target-history-body"></tbody></table></div></section>
         <section class="panel classification-history"><div class="panel-head"><div><span>CLASSIFICATION COUNTS</span><h3>九种分类数量历史 <small id="classification-date"></small></h3></div><button class="refresh" id="refresh-classifications">刷新数据</button></div><div class="classification-summary" id="classification-summary"></div><div class="table-note" id="classification-note"></div><div class="table-wrap"><table><thead id="classification-history-head"></thead><tbody id="classification-history-body"></tbody></table></div></section>
         <section class="panel preview-panel"><div class="panel-head"><div><span>BELOW MA200</span><h3>低于200日线股票 <small id="below-count"></small></h3></div><div class="table-tools"><input id="below-search" type="search" placeholder="搜索代码、名称或行业"><button class="refresh" id="refresh-below">刷新数据</button></div></div><div class="table-note" id="below-note"></div><div class="table-wrap"><table id="below-table"><thead></thead><tbody></tbody></table></div></section>
+        <section class="panel preview-panel"><div class="panel-head"><div><span>NEAR MA20</span><h3>20日均线附近股票 <small id="ma20-count"></small></h3></div><div class="table-tools"><input id="ma20-search" type="search" placeholder="搜索代码、名称或行业"><button class="refresh" id="refresh-ma20">刷新数据</button></div></div><div class="table-note" id="ma20-note"></div><div class="table-wrap"><table id="ma20-table"><thead></thead><tbody></tbody></table></div></section>
+        <section class="panel preview-panel"><div class="panel-head"><div><span>NEAR MA200</span><h3>200日均线附近股票 <small id="ma200-count"></small></h3></div><div class="table-tools"><input id="ma200-search" type="search" placeholder="搜索代码、名称或行业"><button class="refresh" id="refresh-ma200">刷新数据</button></div></div><div class="table-note" id="ma200-note"></div><div class="table-wrap"><table id="ma200-table"><thead></thead><tbody></tbody></table></div></section>
       </section>
 
       <section class="view" id="tasks-view">
@@ -79,6 +81,6 @@
   </aside>
   <div class="toast" id="toast"></div>
   <div class="stock-modal" id="stock-modal"><div class="stock-dialog"><div class="stock-dialog-head"><div><span>STOCK LIST</span><h3 id="stock-list-title">股票明细</h3><div id="stock-list-subtitle"></div></div><button id="close-stock-list">×</button></div><div class="stock-list-tools"><div class="stock-list-meta" id="stock-list-meta"></div><input id="stock-list-search" type="search" placeholder="搜索代码、名称或行业"></div><div class="table-wrap"><table id="stock-list-table"><thead></thead><tbody></tbody></table></div></div></div>
-  <script src="/app.js?v=20260719-1"></script>
+  <script src="/app.js?v=20260719-3"></script>
 </body>
 </html>

@@ -325,22 +325,37 @@ def output_items() -> list[dict[str, Any]]:
     return [{"title": title, **file_info(path)} for title, path in locations if path and path.exists()]
 
 
-def below_ma200_preview() -> dict[str, Any]:
-    path = OUTPUT_DIR / "沪深_低于200日线.csv"
-    preferred = [
-        "代码", "名称", "市场", "最新价", "涨跌幅", "20日涨跌幅",
-        "60日涨跌幅", "250日涨跌幅", "所属行业", "市值",
-        "市盈率TTM", "市净率", "换手率",
-    ]
-    if not path.exists():
+RESULT_PREVIEW_COLUMNS = [
+    "代码", "名称", "市场", "最新价", "涨跌幅", "20日涨跌幅",
+    "60日涨跌幅", "250日涨跌幅", "所属行业", "市值",
+    "市盈率TTM", "市净率", "换手率",
+]
+
+
+def stock_result_preview(path: Path | None) -> dict[str, Any]:
+    if not path or not path.exists():
         return {"file": file_info(None), "columns": [], "all_column_count": 0, "rows": [], "total": 0}
     frame = read_csv_auto(path, dtype=str).fillna("")
-    columns = [column for column in preferred if column in frame.columns]
+    columns = [column for column in RESULT_PREVIEW_COLUMNS if column in frame.columns]
     records = frame[columns].astype(str).to_dict(orient="records")
     return {
         "file": file_info(path), "columns": columns,
         "all_column_count": len(frame.columns), "rows": records, "total": len(frame),
     }
+
+
+def below_ma200_preview() -> dict[str, Any]:
+    return stock_result_preview(OUTPUT_DIR / "沪深_低于200日线.csv")
+
+
+def nearby_ma_preview(period: int) -> dict[str, Any]:
+    patterns = {
+        20: "data/output/震荡上行_上升_赶顶_20日均线附近_*.csv",
+        200: "data/output/震荡上行_上升_赶顶_200日均线附近_*.csv",
+    }
+    if period not in patterns:
+        raise ValueError("均线周期只支持20或200")
+    return stock_result_preview(latest_optional(patterns[period]))
 
 
 def target_count_history_preview() -> dict[str, Any]:
@@ -462,6 +477,14 @@ def api_outputs():
 @app.get("/api/previews/below-ma200")
 def api_below_ma200_preview():
     return below_ma200_preview()
+
+
+@app.get("/api/previews/nearby-ma/{period}")
+def api_nearby_ma_preview(period: int):
+    try:
+        return nearby_ma_preview(period)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.get("/api/previews/target-count-history")

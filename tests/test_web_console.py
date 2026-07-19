@@ -11,6 +11,7 @@ from web_console import (
     latest_zsxq_audio, nearby_ma_preview, parse_progress_line, safe_task_args,
     stock_list_preview, subprocess_environment, rule_comparison_preview,
     opportunity_score_preview,
+    history_coverage_preview,
 )
 
 
@@ -21,6 +22,15 @@ class WebConsoleTests(unittest.TestCase):
         preview = opportunity_score_preview()
         self.assertIn("机会评分", preview["columns"])
         self.assertGreater(preview["total"], 0)
+
+    def test_history_backfill_tasks_and_coverage_preview_are_registered(self):
+        self.assertEqual(TASKS["history_backfill"].script, "backfill_history.py")
+        self.assertTrue(TASKS["history_backfill"].network)
+        self.assertEqual(TASKS["history_audit"].script, "history_coverage.py")
+        preview = history_coverage_preview()
+        self.assertEqual(preview["total"], 303)
+        self.assertIn("median_trading_days", preview["summary"])
+        self.assertIn("60日非重叠截面", preview["columns"])
 
     def test_zsxq_task_uses_noninteractive_web_mode(self):
         task = TASKS["zsxq"]

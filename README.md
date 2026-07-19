@@ -206,6 +206,30 @@ rising_direction_min = 24
 `v1.0-transparent` 当前明确标记为实验版；在测试期稳定为正以前，不应把分数解释为收益概率
 或直接据此交易。
 
+## 历史数据补全与覆盖审计
+
+正式历史库位于 `data/history`，不属于缓存清理范围。首次扩充或中断后继续补全：
+
+```powershell
+.\.venv\Scripts\python.exe '.\src\backfill_history.py' `
+  --start 2021-01-01 --end 2026-07-17
+```
+
+任务串行限速访问 Baostock，每只证券成功后立即原子合并，并把断点写入
+`data/history/backfill_state.json`。相同起止日期再次运行时会跳过已完成证券；`--force`
+用于明确要求重新下载。股票使用前复权，指数使用不复权。Baostock不提供科创50指数
+`000688.SH` 的日线，该项会标记为“数据源不支持”，不会计入股票不足数量。
+
+只生成覆盖质量报告、不联网下载：
+
+```powershell
+.\.venv\Scripts\python.exe '.\src\history_coverage.py' --target-start 2021-01-01
+```
+
+审计结果包括起止日期、交易日数、相对沪深300缺口、文件校验和，以及5/20/60日可用的
+非重叠截面数量。缺口可能包含停牌，因此只作为排查提示，不直接等同于数据丢失。工作台
+“历史覆盖质量”支持搜索和表头排序；任务中心提供“历史数据补全”和“历史覆盖审计”。
+
 ## 产业标签
 
 使用 `src/stock_industry_tags.py` 为股票池追加最多三个细分产业标签。相关度表示业务

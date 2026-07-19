@@ -63,6 +63,8 @@ TASKS: dict[str, TaskDefinition] = {
     "compare_rules": TaskDefinition("规则对比", "比较当前基线与候选分类规则", "compare_classification_rules.py", "规则验证", allowed={"max_stocks": ("--max-stocks", "int"), "snapshots": ("--snapshots", "int"), "step": ("--step", "positive_int"), "horizons": ("--horizons", "horizons")}),
     "opportunity": TaskDefinition("机会评分", "从最新分类总表生成透明机会评分榜单", "generate_opportunity_scores.py", "结果生成"),
     "opportunity_backtest": TaskDefinition("机会评分回测", "检验机会评分的同池分层排序能力", "backtest_opportunity_score.py", "规则验证", allowed={"max_stocks": ("--max-stocks", "int"), "snapshots": ("--snapshots", "int"), "step": ("--step", "positive_int"), "horizons": ("--horizons", "horizons")}),
+    "history_backfill": TaskDefinition("历史数据补全", "从2021年起补全正式历史行情，支持断点续跑", "backfill_history.py", "数据更新", True, allowed={"force": ("--force", "bool")}),
+    "history_audit": TaskDefinition("历史覆盖审计", "检查历史起止日期、缺口、校验和与回测可用截面", "history_coverage.py", "规则验证"),
     "maintenance": TaskDefinition("维护预览", "预览过期缓存和日志，不执行删除", "maintenance.py", "系统维护"),
 }
 
@@ -332,6 +334,7 @@ def output_items() -> list[dict[str, Any]]:
         ("分类总表", latest_optional(str(config_value("files", "classification_pattern")))),
         ("机会评分", latest_optional("data/output/沪深_机会评分_*.csv")),
         ("机会评分回测", latest_optional("data/output/机会评分回测_排序质量_*.csv")),
+        ("历史覆盖审计", latest_optional("data/output/历史覆盖审计_*.csv")),
         ("产业标签", latest_tag_file()),
         ("知识星球语音", latest_zsxq_audio()),
         ("回测报告", latest_optional("data/output/分类历史回测_汇总_*.csv")),
@@ -413,6 +416,36 @@ def opportunity_score_preview() -> dict[str, Any]:
         "file": file_info(path), "columns": columns,
         "rows": frame[columns].astype(str).to_dict(orient="records"),
         "total": len(frame),
+    }
+
+
+def history_coverage_preview() -> dict[str, Any]:
+    path = latest_optional("data/output/历史覆盖审计_*.csv")
+    if not path:
+        return {"file": file_info(None), "columns": [], "rows": [], "total": 0, "summary": {}}
+    frame = read_csv_auto(path, dtype=str).fillna("")
+    preferred = [
+        "代码", "名称", "证券类型", "历史状态", "起始日期", "结束日期", "交易日数",
+        "起始覆盖", "距最新基准交易日", "相对基准缺口天数(含停牌)",
+        "相对基准缺口率", "5日非重叠截面", "20日非重叠截面",
+        "60日非重叠截面", "校验状态",
+    ]
+    columns = [column for column in preferred if column in frame.columns]
+    stocks = frame[frame.get("证券类型", "股票").eq("股票")] if "证券类型" in frame else frame
+    counts = stocks["历史状态"].value_counts().to_dict() if "历史状态" in stocks else {}
+    trading_days = pd.to_numeric(stocks["交易日数"], errors="coerce") if "交易日数" in stocks else pd.Series(dtype=float)
+    sixty = pd.to_numeric(stocks["60日非重叠截面"], errors="coerce") if "60日非重叠截面" in stocks else pd.Series(dtype=float)
+    return {
+        "file": file_info(path), "columns": columns,
+        "rows": frame[columns].astype(str).to_dict(orient="records"), "total": len(frame),
+        "summary": {
+            "complete": int(counts.get("完整", 0)),
+            "usable": int(counts.get("可回测但不完整", 0)),
+            "insufficient": int(counts.get("不足", 0) + counts.get("缺失", 0)),
+            "median_trading_days": int(trading_days.median()) if trading_days.notna().any() else 0,
+            "long_ready": int((sixty >= 10).sum()) if sixty.notna().any() else 0,
+            "unsupported_indexes": int((frame.get("历史状态") == "数据源不支持").sum()) if "历史状态" in frame else 0,
+        },
     }
 
 
@@ -557,7 +590,7 @@ async def disable_ui_cache(request, call_next):
     response = await call_next(request)
     if request.url.path in {
         "/", "/index.html", "/app.js", "/styles.css", "/migration.js",
-        "/migration.css", "/opportunity.js"
+        "/migration.css", "/opportunity.js", "/history.js"
     }:
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
@@ -622,6 +655,11 @@ def api_nearby_ma_preview(period: int):
 @app.get("/api/previews/opportunity-scores")
 def api_opportunity_score_preview():
     return opportunity_score_preview()
+
+
+@app.get("/api/previews/history-coverage")
+def api_history_coverage_preview():
+    return history_coverage_preview()
 
 
 @app.get("/api/previews/target-count-history")

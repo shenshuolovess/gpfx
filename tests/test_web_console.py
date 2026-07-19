@@ -120,6 +120,19 @@ class WebConsoleTests(unittest.TestCase):
         ranking = dashboard_status()["files"]["ranking"]
         self.assertEqual(ranking["name"], "top200_stocks_20260720.xlsx")
 
+    def test_top200_generator_is_the_first_daily_task(self):
+        task = TASKS["generate_top200"]
+        self.assertEqual(task.script, "generate_top200_jqdata.py")
+        self.assertTrue(task.network)
+        self.assertEqual(task.allowed["date"], ("--date", "date"))
+        self.assertEqual(task.allowed["limit"], ("--limit", "stock_limit"))
+        self.assertEqual(
+            safe_task_args(task, {"date": "2026-07-20", "limit": 5000, "skip_institutions": True}),
+            ["--date", "2026-07-20", "--limit", "5000", "--skip-institutions"],
+        )
+        with self.assertRaises(ValueError):
+            safe_task_args(task, {"date": "2026-02-30"})
+
     def test_dashboard_includes_latest_zsxq_output(self):
         zsxq = dashboard_status()["files"]["zsxq"]
         self.assertTrue(zsxq["name"].startswith("zsxq_"))
@@ -142,7 +155,7 @@ class WebConsoleTests(unittest.TestCase):
         self.assertRegex(html, r"/styles\.css\?v=[0-9-]+")
 
     def test_task_registry_uses_python_scripts_without_shell_commands(self):
-        self.assertEqual(next(iter(TASKS)), "calculate_targets")
+        self.assertEqual(next(iter(TASKS)), "generate_top200")
         self.assertEqual(TASKS["calculate_targets"].script, "计算标的.py")
         self.assertIn("rating", TASKS)
         self.assertEqual(TASKS["below_ma200"].script, "低于200日(新版).py")

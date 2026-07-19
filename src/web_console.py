@@ -47,6 +47,7 @@ class TaskDefinition:
 
 
 TASKS: dict[str, TaskDefinition] = {
+    "generate_top200": TaskDefinition("生成Top200选股明细", "通过JQData生成最新选股明细Excel和行业ZIP", "generate_top200_jqdata.py", "每日准备", True, allowed={"date": ("--date", "date"), "limit": ("--limit", "stock_limit"), "skip_institutions": ("--skip-institutions", "bool")}),
     "calculate_targets": TaskDefinition("计算标的", "从最新选股明细生成强势、近期新高和历史新高三类标的", "计算标的.py", "每日准备"),
     "zsxq": TaskDefinition("拉取知识星球", "打开浏览器，登录后自动抓取上一个交易日的文字观点", "拉取知识星球.py", "每日准备", True, base_args=("--auto-start",)),
     "tts": TaskDefinition("知识星球转语音", "自动选择最新知识星球文本，生成可在页面播放的语音", "转语音.py", "每日准备", True),
@@ -89,11 +90,12 @@ def safe_task_args(task: TaskDefinition, options: dict[str, Any]) -> list[str]:
         if kind == "bool":
             if bool(value):
                 result.append(flag)
-        elif kind in {"int", "positive_int"}:
+        elif kind in {"int", "positive_int", "stock_limit"}:
             number = int(value)
-            minimum = 1 if kind == "positive_int" else 0
-            if number < minimum or number > 1000:
-                raise ValueError(f"{name} 超出允许范围 {minimum}—1000")
+            minimum = 1 if kind in {"positive_int", "stock_limit"} else 0
+            maximum = 10000 if kind == "stock_limit" else 1000
+            if number < minimum or number > maximum:
+                raise ValueError(f"{name} 超出允许范围 {minimum}—{maximum}")
             result.extend([flag, str(number)])
         elif kind == "horizons":
             text = str(value or "").strip()
@@ -103,6 +105,17 @@ def safe_task_args(task: TaskDefinition, options: dict[str, Any]) -> list[str]:
             if not horizons or any(item <= 0 or item > 1000 for item in horizons):
                 raise ValueError("horizons 必须位于1—1000")
             result.extend([flag, ",".join(map(str, horizons))])
+        elif kind == "date":
+            text = str(value or "").strip()
+            if not text:
+                continue
+            if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+                raise ValueError(f"{name} 必须使用YYYY-MM-DD格式")
+            try:
+                datetime.strptime(text, "%Y-%m-%d")
+            except ValueError as exc:
+                raise ValueError(f"{name} 不是有效日期") from exc
+            result.extend([flag, text])
     return result
 
 
@@ -327,6 +340,7 @@ def output_items() -> list[dict[str, Any]]:
     locations = [
         ("计算标的数量历史", project_path(config_value("files", "target_count_history", "data/output/计算标的数量历史.csv"))),
         ("分类数量历史", project_path(config_value("files", "classification_count_history", "data/output/分类数量历史.csv"))),
+        ("Top200行业压缩包", latest_optional("data/output/top200_stocks_*_summary_and_industries.zip")),
         ("低于200日线", OUTPUT_DIR / "沪深_低于200日线.csv"),
         ("20日均线附近", latest_optional("data/output/震荡上行_上升_赶顶_20日均线附近_*.csv")),
         ("200日均线附近", latest_optional("data/output/震荡上行_上升_赶顶_200日均线附近_*.csv")),
@@ -669,7 +683,8 @@ def api_status():
 def api_tasks():
     return [
         {"id": key, "title": task.title, "description": task.description,
-         "category": task.category, "network": task.network, "options": list(task.allowed)}
+         "category": task.category, "network": task.network, "options": list(task.allowed),
+         "option_types": {name: kind for name, (_, kind) in task.allowed.items()}}
         for key, task in TASKS.items()
     ]
 

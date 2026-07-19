@@ -70,6 +70,24 @@ tests/        公共模块测试
 .\.venv\Scripts\python.exe '.\src\推推.py' --once
 ```
 
+### 在本地生成 Top200 选股明细
+
+原聚宽研究脚本已适配为本地 JQData SDK 任务。账号密码只通过环境变量传入，不写入配置或日志：
+
+```powershell
+$env:JQDATA_USERNAME='你的聚宽账号'
+$env:JQDATA_PASSWORD='你的聚宽密码'
+.\.venv\Scripts\python.exe '.\src\generate_top200_jqdata.py' --date 2026-07-20
+```
+
+不传 `--date` 时自动使用今天并向前对齐最近交易日；不再修改源码中的固定日期。任务同时生成：
+
+- `data/input/top200_stocks_YYYYMMDD.xlsx`：现有计算标的和均线筛选自动读取；
+- `data/output/top200_stocks_YYYYMMDD_summary_and_industries.zip`：汇总表及按申万一级行业拆分文件。
+
+默认保留原逻辑的机构持股查询。账号无相应数据权限或希望先快速生成时，可加
+`--skip-institutions`，两列机构数据将留空。工作台“每日准备”中也提供同名任务。
+
 可对各脚本执行 `--help` 查看完整参数。显式传入的文件不存在时程序会立即报错，
 不会静默退回旧文件。
 

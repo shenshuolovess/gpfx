@@ -15,6 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -326,17 +327,40 @@ def output_items() -> list[dict[str, Any]]:
 
 
 RESULT_PREVIEW_COLUMNS = [
-    "代码", "名称", "市场", "最新价", "涨跌幅", "20日涨跌幅",
+    "代码", "名称", "市场", "最新价", "涨跌幅", "5日涨跌幅", "20日涨跌幅",
     "60日涨跌幅", "250日涨跌幅", "所属行业", "市值",
     "市盈率TTM", "市净率", "换手率",
 ]
+MARKET_CAP_DISPLAY_COLUMN = "市值(百亿)"
+
+
+def prepare_stock_display(frame):
+    """增加只用于网页展示的百亿市值列，不改动原始CSV。"""
+    result = frame.copy()
+    if "市值" in result.columns:
+        values = pd.to_numeric(
+            result["市值"].astype(str).str.replace(",", "", regex=False),
+            errors="coerce",
+        )
+        result[MARKET_CAP_DISPLAY_COLUMN] = values.map(
+            lambda value: "" if pd.isna(value) else f"{value / 10_000_000_000:.2f}"
+        )
+    return result
+
+
+def display_columns(preferred: list[str], frame) -> list[str]:
+    return [
+        MARKET_CAP_DISPLAY_COLUMN if column == "市值" else column
+        for column in preferred
+        if (MARKET_CAP_DISPLAY_COLUMN if column == "市值" else column) in frame.columns
+    ]
 
 
 def stock_result_preview(path: Path | None) -> dict[str, Any]:
     if not path or not path.exists():
         return {"file": file_info(None), "columns": [], "all_column_count": 0, "rows": [], "total": 0}
-    frame = read_csv_auto(path, dtype=str).fillna("")
-    columns = [column for column in RESULT_PREVIEW_COLUMNS if column in frame.columns]
+    frame = prepare_stock_display(read_csv_auto(path, dtype=str).fillna(""))
+    columns = display_columns(RESULT_PREVIEW_COLUMNS, frame)
     records = frame[columns].astype(str).to_dict(orient="records")
     return {
         "file": file_info(path), "columns": columns,
@@ -401,7 +425,7 @@ def stock_list_preview(source: str, category: str, date: str) -> dict[str, Any]:
     else:
         raise ValueError("未知股票列表来源")
     preferred = [
-        "代码", "名称", "市场", "最新价", "涨跌幅", "20日涨跌幅",
+        "代码", "名称", "市场", "最新价", "涨跌幅", "5日涨跌幅", "20日涨跌幅",
         "60日涨跌幅", "所属行业", "市值", "市盈率TTM", "换手率",
     ]
     if not path.exists():
@@ -409,8 +433,8 @@ def stock_list_preview(source: str, category: str, date: str) -> dict[str, Any]:
             "source": source, "category": category, "date": date_tag,
             "file": file_info(None), "columns": [], "rows": [], "total": 0,
         }
-    frame = read_csv_auto(path, dtype=str).fillna("")
-    columns = [column for column in preferred if column in frame.columns]
+    frame = prepare_stock_display(read_csv_auto(path, dtype=str).fillna(""))
+    columns = display_columns(preferred, frame)
     return {
         "source": source, "category": category, "date": date_tag,
         "file": file_info(path), "columns": columns,

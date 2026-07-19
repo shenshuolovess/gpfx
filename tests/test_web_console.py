@@ -36,6 +36,8 @@ class WebConsoleTests(unittest.TestCase):
         classification = stock_list_preview("classification", "上升", "2026-07-17")
         self.assertIn("代码", target["columns"])
         self.assertIn("名称", classification["columns"])
+        self.assertIn("5日涨跌幅", classification["columns"])
+        self.assertIn("市值(百亿)", classification["columns"])
         self.assertEqual(classification["total"], 18)
 
     def test_stock_list_rejects_unknown_category(self):
@@ -63,6 +65,10 @@ class WebConsoleTests(unittest.TestCase):
         self.assertGreater(preview["total"], 0)
         self.assertIn("代码", preview["columns"])
         self.assertIn("名称", preview["columns"])
+        self.assertIn("5日涨跌幅", preview["columns"])
+        self.assertIn("市值(百亿)", preview["columns"])
+        self.assertNotIn("市值", preview["columns"])
+        self.assertRegex(preview["rows"][0]["市值(百亿)"], r"^\d+\.\d{2}$")
         self.assertEqual(len(preview["rows"]), preview["total"])
 
     def test_nearby_ma_previews_use_latest_outputs(self):

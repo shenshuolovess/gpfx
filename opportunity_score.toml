@@ -1,0 +1,25 @@
+[weights]
+trend = 0.30
+relative_strength = 0.25
+breakout = 0.15
+confirmation = 0.20
+setup = 0.10
+
+[risk]
+exhaustion_start = 70
+exhaustion_max_penalty = 15
+position_start = 88
+position_max_penalty = 5
+stall_start = 70
+stall_max_penalty = 8
+atr_start = 0.04
+atr_full_penalty = 0.10
+atr_max_penalty = 7
+
+[market]
+max_adjustment = 10
+
+[levels]
+high = 75
+watch = 60
+neutral = 45

@@ -61,6 +61,8 @@ TASKS: dict[str, TaskDefinition] = {
     "research": TaskDefinition("最新研报", "更新最近三份公开研报并复用已有正文", "fetch_stock_research.py", "数据更新", True, base_args=("--limit", "3"), allowed={"workers": ("--workers", "int"), "force": ("--force", "bool")}),
     "backtest": TaskDefinition("分类回测", "运行分类边界的稳健历史回测", "backtest_classification.py", "规则验证", allowed={"max_stocks": ("--max-stocks", "int"), "snapshots": ("--snapshots", "int"), "step": ("--step", "positive_int"), "horizons": ("--horizons", "horizons")}),
     "compare_rules": TaskDefinition("规则对比", "比较当前基线与候选分类规则", "compare_classification_rules.py", "规则验证", allowed={"max_stocks": ("--max-stocks", "int"), "snapshots": ("--snapshots", "int"), "step": ("--step", "positive_int"), "horizons": ("--horizons", "horizons")}),
+    "opportunity": TaskDefinition("机会评分", "从最新分类总表生成透明机会评分榜单", "generate_opportunity_scores.py", "结果生成"),
+    "opportunity_backtest": TaskDefinition("机会评分回测", "检验机会评分的同池分层排序能力", "backtest_opportunity_score.py", "规则验证", allowed={"max_stocks": ("--max-stocks", "int"), "snapshots": ("--snapshots", "int"), "step": ("--step", "positive_int"), "horizons": ("--horizons", "horizons")}),
     "maintenance": TaskDefinition("维护预览", "预览过期缓存和日志，不执行删除", "maintenance.py", "系统维护"),
 }
 
@@ -328,6 +330,8 @@ def output_items() -> list[dict[str, Any]]:
         ("股票页面", OUTPUT_DIR / "stock_pages" / "index.html"),
         ("市场日报", latest_optional("data/output/daily_briefs/*.html")),
         ("分类总表", latest_optional(str(config_value("files", "classification_pattern")))),
+        ("机会评分", latest_optional("data/output/沪深_机会评分_*.csv")),
+        ("机会评分回测", latest_optional("data/output/机会评分回测_排序质量_*.csv")),
         ("产业标签", latest_tag_file()),
         ("知识星球语音", latest_zsxq_audio()),
         ("回测报告", latest_optional("data/output/分类历史回测_汇总_*.csv")),
@@ -389,6 +393,27 @@ def nearby_ma_preview(period: int) -> dict[str, Any]:
     if period not in patterns:
         raise ValueError("均线周期只支持20或200")
     return stock_result_preview(latest_optional(patterns[period]))
+
+
+def opportunity_score_preview() -> dict[str, Any]:
+    path = latest_optional("data/output/沪深_机会评分_*.csv")
+    if not path:
+        return {"file": file_info(None), "columns": [], "rows": [], "total": 0}
+    frame = prepare_stock_display(read_csv_auto(path, dtype=str).fillna(""))
+    preferred = [
+        "代码", "名称", "市场", "分类", "机会评分", "机会等级",
+        "趋势贡献", "相对强弱贡献", "突破贡献", "确认贡献", "形态贡献",
+        "风险扣分", "大盘调整", "信号覆盖率", "机会评分说明",
+        "评分验证状态",
+        "最新价", "涨跌幅", "5日涨跌幅", "20日涨跌幅", "60日涨跌幅",
+        "所属行业", "市值",
+    ]
+    columns = display_columns(preferred, frame)
+    return {
+        "file": file_info(path), "columns": columns,
+        "rows": frame[columns].astype(str).to_dict(orient="records"),
+        "total": len(frame),
+    }
 
 
 def target_count_history_preview() -> dict[str, Any]:
@@ -531,7 +556,8 @@ app = FastAPI(title="A股研究控制台", version="0.1.0")
 async def disable_ui_cache(request, call_next):
     response = await call_next(request)
     if request.url.path in {
-        "/", "/index.html", "/app.js", "/styles.css", "/migration.js", "/migration.css"
+        "/", "/index.html", "/app.js", "/styles.css", "/migration.js",
+        "/migration.css", "/opportunity.js"
     }:
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
@@ -591,6 +617,11 @@ def api_nearby_ma_preview(period: int):
         return nearby_ma_preview(period)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/api/previews/opportunity-scores")
+def api_opportunity_score_preview():
+    return opportunity_score_preview()
 
 
 @app.get("/api/previews/target-count-history")

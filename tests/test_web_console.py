@@ -10,10 +10,18 @@ from web_console import (
     classification_count_history_preview, dashboard_status, latest_tag_file,
     latest_zsxq_audio, nearby_ma_preview, parse_progress_line, safe_task_args,
     stock_list_preview, subprocess_environment, rule_comparison_preview,
+    opportunity_score_preview,
 )
 
 
 class WebConsoleTests(unittest.TestCase):
+    def test_opportunity_score_task_and_preview_are_registered(self):
+        self.assertEqual(TASKS["opportunity"].script, "generate_opportunity_scores.py")
+        self.assertEqual(TASKS["opportunity_backtest"].script, "backtest_opportunity_score.py")
+        preview = opportunity_score_preview()
+        self.assertIn("机会评分", preview["columns"])
+        self.assertGreater(preview["total"], 0)
+
     def test_zsxq_task_uses_noninteractive_web_mode(self):
         task = TASKS["zsxq"]
         self.assertEqual(task.script, "拉取知识星球.py")

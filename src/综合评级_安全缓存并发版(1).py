@@ -45,6 +45,7 @@ import baostock as bs
 from pipeline_config import config_value, project_path, resolve_input
 from classification_rules import classify_label
 from history_store import archive_run_snapshot, merge_history
+from opportunity_score import add_opportunity_scores, opportunity_output
 from stock_utils import dated_output_path, normalize_code, read_csv_auto, write_csv
 
 
@@ -1614,12 +1615,19 @@ def main(argv=None):
         total_df["_原始顺序"] = total_df["代码"].astype(str).str.strip().map(order_map)
         total_df = total_df.sort_values("_原始顺序", na_position="last").drop(columns=["_原始顺序"])
 
+    # 分类只描述当前状态；机会评分作为独立排序层，不参与 classify_label。
+    _, _, market_metrics = analyze_one_stock_from_hist(BENCHMARK_CODE, bench_df, bench_df)
+    total_df = add_opportunity_scores(total_df, market_metrics=market_metrics)
+    opportunity_df = opportunity_output(total_df)
+
     total_csv = dated_output_path(output_dir, "沪深_分类总表", date_tag=DATE_TAG)
     total_xlsx = dated_output_path(
         output_dir, "沪深_分类总表", date_tag=DATE_TAG, suffix=".xlsx"
     )
+    opportunity_csv = dated_output_path(output_dir, "沪深_机会评分", date_tag=DATE_TAG)
 
     write_csv(total_df, total_csv)
+    write_csv(opportunity_df, opportunity_csv)
     classification_counts = (
         total_df["分类"].value_counts().to_dict() if "分类" in total_df.columns else {}
     )
@@ -1643,6 +1651,7 @@ def main(argv=None):
     print("\n全部完成。")
     print(f"总用时：{time.time() - t_all:.2f} 秒")
     print(f"总表已输出：{total_csv}")
+    print(f"机会评分已输出：{opportunity_csv}")
     print(f"总表Excel已输出：{total_xlsx}")
     print(f"分类数量历史：{project_path(args.count_history)}，共 {len(count_history)} 个日期")
     print(f"可复现运行快照：{run_snapshot}")

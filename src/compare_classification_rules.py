@@ -32,6 +32,7 @@ from classification_rules import (
     rule_config_from_mapping,
 )
 from history_store import load_history
+from opportunity_score import OPPORTUNITY_SCORE_FIELDS
 from pipeline_config import PROJECT_DIR, config_value, project_path, resolve_input
 from stock_utils import normalize_code, read_csv_auto, timestamped_output_path, write_csv
 
@@ -281,7 +282,7 @@ def build_comparison_samples(
                 "样本区间": period_by_date[snapshot],
                 "信号收盘价": float(row["close"]),
             }
-            for field in REQUIRED_CLASSIFICATION_FIELDS:
+            for field in dict.fromkeys(REQUIRED_CLASSIFICATION_FIELDS + OPPORTUNITY_SCORE_FIELDS):
                 record[field] = row.get(field)
             for name, config in rules.items():
                 record[f"{name}分类"] = classify_label(row, config)

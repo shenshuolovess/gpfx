@@ -182,6 +182,30 @@ rising_direction_min = 24
 且没有明显提高分类跳变率或制造规则空档时，才考虑更新生产默认值。当前历史股票池仍有
 幸存者偏差，正式定稿前应继续积累逐日股票池快照并扩充到多个市场周期。
 
+## 机会评分
+
+机会评分位于分类之上，不参与九种分类判断。分类继续描述股票当前状态，机会评分只提供
+研究排序。评分配置集中在根目录 `opportunity_score.toml`，包括趋势质量、相对强弱、
+突破动能、趋势确认、形态准备、大盘调整和风险扣分。
+
+综合评级会自动在分类总表中增加评分字段，并另行输出按分数降序排列的
+`沪深_机会评分_YYYYMMDD.csv`。也可以只读取最新分类总表重新生成：
+
+```powershell
+.\.venv\Scripts\python.exe '.\src\generate_opportunity_scores.py'
+```
+
+机会评分的验证目标是横截面排序能力，而不是某个分类的平均收益。运行同池五分位回测：
+
+```powershell
+.\.venv\Scripts\python.exe '.\src\backtest_opportunity_score.py' `
+  --max-stocks 0 --snapshots 30 --step 5 --horizons 5
+```
+
+回测输出五档分层、逐截面秩相关 IC、Q5 减 Q1 同池超额及训练/验证/测试分段结果。
+`v1.0-transparent` 当前明确标记为实验版；在测试期稳定为正以前，不应把分数解释为收益概率
+或直接据此交易。
+
 ## 产业标签
 
 使用 `src/stock_industry_tags.py` 为股票池追加最多三个细分产业标签。相关度表示业务

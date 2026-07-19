@@ -39,9 +39,97 @@ from stock_utils import normalize_code, read_csv_auto, timestamped_output_path, 
 DEFAULT_CONFIG_FILE = PROJECT_DIR / "classification_rule_configs.toml"
 
 
+THRESHOLD_SPECS = {
+    "rising_trend_min": ("trend_score", "趋势分", ">="),
+    "rising_direction_min": ("direction_score", "方向分", ">="),
+    "rising_adx_min": ("adx_score", "ADX分", ">="),
+    "rising_rs_min": ("rs_score", "相对强弱分", ">="),
+    "rising_breakout_min": ("breakout_score", "突破分", ">="),
+    "rising_ma_structure_min": ("ma_structure_score", "均线结构分", ">="),
+    "rising_exhaustion_max_exclusive": ("exhaustion_score", "衰竭分", "<"),
+}
+
+
 def rule_hash(config: RuleConfig) -> str:
     payload = json.dumps(asdict(config), ensure_ascii=False, sort_keys=True).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
+
+
+def build_threshold_changes(rules: dict[str, RuleConfig]) -> pd.DataFrame:
+    """列出候选规则相对生产基线实际修改过的阈值。"""
+    rows = []
+    baseline = asdict(rules["baseline"])
+    for name, config in rules.items():
+        if name == "baseline":
+            continue
+        for parameter, candidate_value in asdict(config).items():
+            baseline_value = baseline[parameter]
+            if candidate_value == baseline_value:
+                continue
+            metric, display, operator = THRESHOLD_SPECS.get(
+                parameter, ("", parameter, "")
+            )
+            rows.append({
+                "候选规则": name,
+                "参数": parameter,
+                "信号字段": metric,
+                "阈值名称": display,
+                "比较符": operator,
+                "基线阈值": baseline_value,
+                "候选阈值": candidate_value,
+                "调整方向": "放宽" if (
+                    (operator in (">=", ">") and candidate_value < baseline_value)
+                    or (operator in ("<=", "<") and candidate_value > baseline_value)
+                ) else "收紧",
+            })
+    return pd.DataFrame(rows)
+
+
+def triggered_thresholds(
+    row: pd.Series, baseline: RuleConfig, candidate: RuleConfig
+) -> list[str]:
+    """返回该样本因候选阈值变动而新通过/不再通过的具体条件。"""
+    triggers = []
+    baseline_values, candidate_values = asdict(baseline), asdict(candidate)
+    for parameter, candidate_limit in candidate_values.items():
+        baseline_limit = baseline_values[parameter]
+        if candidate_limit == baseline_limit or parameter not in THRESHOLD_SPECS:
+            continue
+        metric, display, operator = THRESHOLD_SPECS[parameter]
+        value = pd.to_numeric(pd.Series([row.get(metric)]), errors="coerce").iloc[0]
+        if pd.isna(value):
+            continue
+        baseline_pass = {
+            ">=": value >= baseline_limit, ">": value > baseline_limit,
+            "<=": value <= baseline_limit, "<": value < baseline_limit,
+        }[operator]
+        candidate_pass = {
+            ">=": value >= candidate_limit, ">": value > candidate_limit,
+            "<=": value <= candidate_limit, "<": value < candidate_limit,
+        }[operator]
+        if baseline_pass != candidate_pass:
+            action = "新通过" if candidate_pass else "不再通过"
+            triggers.append(
+                f"{display}{value:.1f}{operator}{candidate_limit:g}"
+                f"（基线{baseline_limit:g}，{action}）"
+            )
+    return triggers
+
+
+def add_change_triggers(
+    detail: pd.DataFrame, rules: dict[str, RuleConfig]
+) -> pd.DataFrame:
+    result = detail.copy()
+    baseline = rules["baseline"]
+    for name, candidate in rules.items():
+        if name == "baseline":
+            continue
+        result[f"{name}触发阈值"] = result.apply(
+            lambda row: "；".join(triggered_thresholds(row, baseline, candidate))
+            if bool(row[f"{name}是否变化"]) else "",
+            axis=1,
+        )
+    return result
 
 
 def load_rule_configs(
@@ -129,6 +217,10 @@ def build_comparison_samples(
     codes = _sample_codes(
         pool["代码"].dropna().astype(str).drop_duplicates().tolist(), args.max_stocks
     )
+    name_map = {
+        normalize_code(row["代码"], "suffix"): str(row.get("名称", ""))
+        for _, row in pool.iterrows()
+    }
 
     benchmark = load_history(
         history_dir,
@@ -183,6 +275,7 @@ def build_comparison_samples(
 
             record = {
                 "代码": normalize_code(code, "suffix"),
+                "名称": name_map.get(normalize_code(code, "suffix"), ""),
                 "回测截面日": snapshot,
                 "实际信号日": str(row["date"]),
                 "样本区间": period_by_date[snapshot],
@@ -219,7 +312,8 @@ def build_comparison_samples(
     detail = pd.DataFrame(records)
     if detail.empty:
         raise RuntimeError("没有生成规则比较样本，请检查历史覆盖和参数")
-    return add_pool_relative_returns(detail, horizons), stats, snapshot_dates
+    detail = add_pool_relative_returns(detail, horizons)
+    return add_change_triggers(detail, rules), stats, snapshot_dates
 
 
 def to_long_labels(detail: pd.DataFrame, rules: dict[str, RuleConfig]) -> pd.DataFrame:
@@ -406,32 +500,118 @@ def build_change_matrix(detail: pd.DataFrame, rules: dict[str, RuleConfig]) -> p
 
 
 def summarize_changed_samples(
-    detail: pd.DataFrame, rules: dict[str, RuleConfig], horizons: list[int]
+    detail: pd.DataFrame, rules: dict[str, RuleConfig], horizons: list[int],
+    *, bootstrap_iterations: int = 500, seed: int = 20260714, step: int = 5,
 ) -> pd.DataFrame:
+    rows = []
+    rng = np.random.default_rng(seed)
+    for name in rules:
+        if name == "baseline":
+            continue
+        changed = detail[detail[f"{name}是否变化"]]
+        periods = [("总体", changed)] + list(changed.groupby("样本区间", sort=False))
+        for period_name, period_frame in periods:
+            for (old_label, new_label), subset in period_frame.groupby(
+                ["baseline分类", f"{name}分类"], sort=True
+            ):
+                for horizon in horizons:
+                    returns = pd.to_numeric(subset[f"未来{horizon}日收益"], errors="coerce")
+                    valid = subset.loc[returns.dropna().index]
+                    returns = returns.dropna()
+                    excess = pd.to_numeric(valid[f"未来{horizon}日超额"], errors="coerce")
+                    pool_excess = pd.to_numeric(
+                        valid[f"未来{horizon}日同池超额"], errors="coerce"
+                    )
+                    ci_low, ci_high = bootstrap_snapshot_mean_ci(
+                        valid, f"未来{horizon}日同池超额",
+                        iterations=bootstrap_iterations, rng=rng,
+                    )
+                    contribution = stock_contribution_ratio(
+                        valid, f"未来{horizon}日同池超额"
+                    )
+                    quality, quality_note = quality_assessment(
+                        samples=len(returns), stocks=valid["代码"].nunique(),
+                        dates=valid["回测截面日"].nunique(), contribution=contribution,
+                        mean_return=returns.mean(), median_return=returns.median(),
+                        overlapping=step < horizon,
+                    )
+                    trigger_counts = (
+                        valid[f"{name}触发阈值"].str.split("；").explode()
+                        .loc[lambda values: values.ne("")].value_counts()
+                    )
+                    rows.append({
+                        "候选规则": name,
+                        "样本区间": period_name,
+                        "基线分类": old_label,
+                        "候选分类": new_label,
+                        "周期": f"{horizon}日",
+                        "样本数": len(returns),
+                        "不同股票数": valid["代码"].nunique(),
+                        "覆盖截面数": valid["回测截面日"].nunique(),
+                        "平均收益": returns.mean() if len(returns) else np.nan,
+                        "中位收益": returns.median() if len(returns) else np.nan,
+                        "平均超额": excess.mean() if len(excess) else np.nan,
+                        "跑赢基准率": (excess > 0).mean() if len(excess) else np.nan,
+                        "平均同池超额": pool_excess.mean() if len(pool_excess) else np.nan,
+                        "跑赢同池率": (pool_excess > 0).mean() if len(pool_excess) else np.nan,
+                        "同池超额95%CI下限": ci_low,
+                        "同池超额95%CI上限": ci_high,
+                        "最大单股绝对贡献占比": contribution,
+                        "窗口是否重叠": "是" if step < horizon else "否",
+                        "可信度": quality,
+                        "数据质量提示": quality_note,
+                        "统计结论": "显著正向" if pd.notna(ci_low) and ci_low > 0 else (
+                            "显著负向" if pd.notna(ci_high) and ci_high < 0 else "暂不显著"
+                        ),
+                        "主要触发阈值": trigger_counts.index[0] if len(trigger_counts) else "",
+                    })
+    return pd.DataFrame(rows)
+
+
+def summarize_changed_stocks(
+    detail: pd.DataFrame, rules: dict[str, RuleConfig], horizons: list[int],
+    *, limit: int = 8,
+) -> pd.DataFrame:
+    """按迁移方向聚合单股表现，并生成正向榜/负向榜。"""
     rows = []
     for name in rules:
         if name == "baseline":
             continue
         changed = detail[detail[f"{name}是否变化"]]
-        for (old_label, new_label), subset in changed.groupby(
-            ["baseline分类", f"{name}分类"], sort=True
-        ):
-            for horizon in horizons:
-                returns = pd.to_numeric(subset[f"未来{horizon}日收益"], errors="coerce").dropna()
-                excess = pd.to_numeric(subset[f"未来{horizon}日超额"], errors="coerce").dropna()
-                rows.append(
-                    {
-                        "候选规则": name,
-                        "基线分类": old_label,
-                        "候选分类": new_label,
-                        "周期": f"{horizon}日",
-                        "样本数": len(returns),
-                        "平均收益": returns.mean() if len(returns) else np.nan,
-                        "中位收益": returns.median() if len(returns) else np.nan,
-                        "平均超额": excess.mean() if len(excess) else np.nan,
-                        "跑赢基准率": (excess > 0).mean() if len(excess) else np.nan,
-                    }
-                )
+        periods = [("总体", changed)] + list(changed.groupby("样本区间", sort=False))
+        for period_name, period_frame in periods:
+            for (old_label, new_label), subset in period_frame.groupby(
+                ["baseline分类", f"{name}分类"], sort=True
+            ):
+                for horizon in horizons:
+                    column = f"未来{horizon}日同池超额"
+                    stock_rows = []
+                    for code, stock in subset.groupby("代码"):
+                        values = pd.to_numeric(stock[column], errors="coerce").dropna()
+                        if values.empty:
+                            continue
+                        triggers = stock[f"{name}触发阈值"].str.split("；").explode()
+                        triggers = triggers[triggers.ne("")].value_counts()
+                        stock_rows.append({
+                            "候选规则": name, "样本区间": period_name,
+                            "基线分类": old_label, "候选分类": new_label,
+                            "周期": f"{horizon}日", "代码": code,
+                            "名称": stock["名称"].dropna().iloc[-1] if "名称" in stock else "",
+                            "样本数": len(values), "平均同池超额": values.mean(),
+                            "跑赢同池率": (values > 0).mean(),
+                            "最近信号日": stock["回测截面日"].max(),
+                            "主要触发阈值": triggers.index[0] if len(triggers) else "",
+                        })
+                    ranked = pd.DataFrame(stock_rows)
+                    if ranked.empty:
+                        continue
+                    ranked = ranked.sort_values("平均同池超额", ascending=False)
+                    for board, selected in (("正向榜", ranked.head(limit)), ("负向榜", ranked.tail(limit).iloc[::-1])):
+                        for rank, (_, item) in enumerate(selected.iterrows(), start=1):
+                            output = item.to_dict()
+                            output["榜单"] = board
+                            output["排名"] = rank
+                            rows.append(output)
     return pd.DataFrame(rows)
 
 
@@ -481,7 +661,12 @@ def main(argv=None) -> int:
     stability = summarize_stability(long_detail)
     deltas = build_baseline_deltas(performance)
     matrix = build_change_matrix(detail, rules)
-    changed = summarize_changed_samples(detail, rules, args.horizons)
+    changed = summarize_changed_samples(
+        detail, rules, args.horizons,
+        bootstrap_iterations=args.bootstrap_iterations, seed=args.seed, step=args.step,
+    )
+    changed_stocks = summarize_changed_stocks(detail, rules, args.horizons)
+    threshold_changes = build_threshold_changes(rules)
 
     output_dir = project_path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -494,6 +679,8 @@ def main(argv=None) -> int:
         "基线差异": timestamped_output_path(output_dir, "分类规则对比_基线差异", timestamp=timestamp, suffix=".csv"),
         "变化矩阵": timestamped_output_path(output_dir, "分类规则对比_变化矩阵", timestamp=timestamp, suffix=".csv"),
         "变化样本": timestamped_output_path(output_dir, "分类规则对比_变化样本", timestamp=timestamp, suffix=".csv"),
+        "迁移代表股票": timestamped_output_path(output_dir, "分类规则对比_迁移代表股票", timestamp=timestamp, suffix=".csv"),
+        "阈值变化": timestamped_output_path(output_dir, "分类规则对比_阈值变化", timestamp=timestamp, suffix=".csv"),
     }
     for label, frame in (
         ("明细", detail),
@@ -503,6 +690,8 @@ def main(argv=None) -> int:
         ("基线差异", deltas),
         ("变化矩阵", matrix),
         ("变化样本", changed),
+        ("迁移代表股票", changed_stocks),
+        ("阈值变化", threshold_changes),
     ):
         write_csv(frame, outputs[label])
 

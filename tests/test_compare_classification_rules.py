@@ -8,14 +8,23 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from compare_classification_rules import (
+    add_change_triggers,
     assign_time_segments,
     build_baseline_deltas,
+    build_threshold_changes,
     summarize_performance,
+    summarize_changed_samples,
+    summarize_changed_stocks,
     load_rule_configs,
 )
 
 
 class RuleComparisonTests(unittest.TestCase):
+    def candidate_rules(self):
+        return load_rule_configs(
+            PROJECT_ROOT / "classification_rule_configs.toml", ["relaxed_rising"]
+        )[0]
+
     def test_time_split_is_chronological_60_20_20(self):
         dates = [f"2026-01-{day:02d}" for day in range(1, 11)]
         segments = assign_time_segments(dates)
@@ -32,6 +41,43 @@ class RuleComparisonTests(unittest.TestCase):
         self.assertIn("放宽", descriptions["relaxed_rising"])
         self.assertEqual(rules["baseline"].rising_trend_min, 72)
         self.assertEqual(rules["relaxed_rising"].rising_trend_min, 68)
+
+    def test_threshold_changes_and_sample_triggers_are_explicit(self):
+        rules = self.candidate_rules()
+        changes = build_threshold_changes(rules)
+        self.assertEqual(set(changes["参数"]), {
+            "rising_trend_min", "rising_direction_min", "rising_adx_min", "rising_rs_min",
+        })
+        row = {
+            "relaxed_rising是否变化": True,
+            "trend_score": 70, "direction_score": 30,
+            "adx_score": 60, "rs_score": 20,
+        }
+        detail = add_change_triggers(pd.DataFrame([row]), rules)
+        self.assertIn("趋势分70.0>=68（基线72，新通过）", detail.iloc[0]["relaxed_rising触发阈值"])
+
+    def test_migration_summary_has_periods_quality_and_ranked_stocks(self):
+        rules = self.candidate_rules()
+        rows = []
+        for code, value in (("000001.SZ", 0.04), ("000002.SZ", -0.02)):
+            rows.append({
+                "代码": code, "名称": code, "回测截面日": "2026-01-01",
+                "样本区间": "测试期", "baseline分类": "边界模糊",
+                "relaxed_rising分类": "上升", "relaxed_rising是否变化": True,
+                "relaxed_rising触发阈值": "趋势分70.0>=68（基线72，新通过）",
+                "未来5日收益": value, "未来5日超额": value - 0.01,
+                "未来5日同池超额": value,
+            })
+        detail = pd.DataFrame(rows)
+        summary = summarize_changed_samples(
+            detail, rules, [5], bootstrap_iterations=10, step=5,
+        )
+        self.assertEqual(set(summary["样本区间"]), {"总体", "测试期"})
+        self.assertIn("平均同池超额", summary.columns)
+        self.assertIn("数据质量提示", summary.columns)
+        stocks = summarize_changed_stocks(detail, rules, [5], limit=1)
+        self.assertEqual(set(stocks["榜单"]), {"正向榜", "负向榜"})
+        self.assertEqual(stocks[stocks["榜单"] == "正向榜"].iloc[0]["代码"], "000001.SZ")
 
     def test_baseline_delta_is_candidate_minus_baseline(self):
         rows = []

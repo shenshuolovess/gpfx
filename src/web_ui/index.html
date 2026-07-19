@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>A股研究控制台</title>
   <link rel="stylesheet" href="/styles.css?v=20260719-5">
+  <link rel="stylesheet" href="/migration.css?v=20260719-1">
   <style>
     .manual-badge{position:relative;z-index:1;min-width:225px;padding:17px 19px;border-radius:14px;border:1px solid rgba(102,224,194,.24);background:rgba(5,24,30,.45)}
     .manual-badge span,.manual-badge b,.manual-badge small{display:block}.manual-badge span{font-size:8px;letter-spacing:.2em;color:var(--mint)}
@@ -74,6 +75,7 @@
         <section class="panel"><div class="panel-head"><div><span>LATEST EXPERIMENT</span><h3>最近一次对比实验</h3></div><div class="rule-controls"><select id="rule-period"></select><select id="rule-horizon"></select><button class="refresh" id="refresh-rules">刷新结果</button><button class="text-btn" data-view-link="tasks">运行新对比 →</button></div></div><div class="rule-hero" id="rule-summary"></div><div class="table-note" id="rule-note"></div></section>
         <section class="panel"><div class="panel-head"><div><span>STABILITY</span><h3>规则稳定性</h3></div></div><div class="rule-cards" id="rule-stability"></div></section>
         <section class="panel"><div class="panel-head"><div><span>SAME-POOL PERFORMANCE</span><h3>各分类并排表现</h3></div></div><div class="table-note">核心比较同一截面股票池内的相对收益；数值为正才表示该分类跑赢当时股票池。</div><div class="table-wrap"><table id="rule-performance"><thead></thead><tbody></tbody></table></div></section>
+        <section class="panel"><div class="panel-head"><div><span>MIGRATION DIAGNOSTICS</span><h3>分类迁移诊断</h3></div></div><div class="threshold-changes" id="rule-thresholds"></div><div class="table-note">点击迁移行展开正向榜、负向榜和具体触发阈值；收益均为同一截面股票池内的相对收益。</div><div class="migration-list" id="rule-migrations"></div></section>
         <section class="panel"><div class="panel-head"><div><span>FILES</span><h3>实验文件</h3></div></div><div class="download-links" id="rule-downloads"></div></section>
       </section>
 
@@ -93,6 +95,7 @@
   </aside>
   <div class="toast" id="toast"></div>
   <div class="stock-modal" id="stock-modal"><div class="stock-dialog"><div class="stock-dialog-head"><div><span>STOCK LIST</span><h3 id="stock-list-title">股票明细</h3><div id="stock-list-subtitle"></div></div><button id="close-stock-list">×</button></div><div class="stock-list-tools"><div class="stock-list-meta" id="stock-list-meta"></div><input id="stock-list-search" type="search" placeholder="搜索代码、名称或行业"></div><div class="table-wrap"><table id="stock-list-table"><thead></thead><tbody></tbody></table></div></div></div>
-  <script src="/app.js?v=20260719-5"></script>
+  <script src="/app.js?v=20260719-6"></script>
+  <script src="/migration.js?v=20260719-1"></script>
 </body>
 </html>

@@ -446,7 +446,10 @@ def rule_comparison_preview() -> dict[str, Any]:
         raise ValueError(f"规则对比元数据无法读取：{exc}") from exc
 
     frames: dict[str, pd.DataFrame] = {}
-    for label in ("表现", "稳定性", "基线差异", "覆盖率"):
+    for label in (
+        "表现", "稳定性", "基线差异", "覆盖率",
+        "变化样本", "迁移代表股票", "阈值变化",
+    ):
         path = _comparison_output_path(metadata, label)
         frames[label] = read_csv_auto(path) if path else pd.DataFrame()
 
@@ -480,6 +483,9 @@ def rule_comparison_preview() -> dict[str, Any]:
         "stability": _json_safe_records(frames["稳定性"]),
         "deltas": _json_safe_records(deltas),
         "coverage": _json_safe_records(frames["覆盖率"]),
+        "migrations": _json_safe_records(frames["变化样本"]),
+        "migration_stocks": _json_safe_records(frames["迁移代表股票"]),
+        "threshold_changes": _json_safe_records(frames["阈值变化"]),
         "outputs": outputs,
     }
 
@@ -524,7 +530,9 @@ app = FastAPI(title="A股研究控制台", version="0.1.0")
 @app.middleware("http")
 async def disable_ui_cache(request, call_next):
     response = await call_next(request)
-    if request.url.path in {"/", "/index.html", "/app.js", "/styles.css"}:
+    if request.url.path in {
+        "/", "/index.html", "/app.js", "/styles.css", "/migration.js", "/migration.css"
+    }:
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
     return response

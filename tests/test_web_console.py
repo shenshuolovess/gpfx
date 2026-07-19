@@ -153,6 +153,9 @@ class WebConsoleTests(unittest.TestCase):
         if preview["available"]:
             self.assertIn("performance", preview)
             self.assertIn("stability", preview)
+            self.assertIn("migrations", preview)
+            self.assertIn("migration_stocks", preview)
+            self.assertIn("threshold_changes", preview)
             self.assertGreaterEqual(len(preview["rules"]), 2)
 
 

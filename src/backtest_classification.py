@@ -52,6 +52,8 @@ def choose_snapshot_dates(
     snapshots: int,
     step: int,
 ) -> list[str]:
+    if step <= 0:
+        raise ValueError("step 必须为正整数")
     dates = benchmark.sort_values("date")["date"].astype(str).drop_duplicates().tolist()
     last_position = len(dates) - max_horizon - 1
     first_position = minimum_history - 1
@@ -87,23 +89,112 @@ def benchmark_forward_returns(
     return result
 
 
-def summarize(detail: pd.DataFrame, horizons: list[int]) -> pd.DataFrame:
+def trimmed_mean(values: pd.Series, proportion: float = 0.1) -> float:
+    values = pd.to_numeric(values, errors="coerce").dropna().sort_values()
+    if values.empty:
+        return np.nan
+    cut = int(len(values) * proportion)
+    trimmed = values.iloc[cut:len(values) - cut] if cut else values
+    return float(trimmed.mean())
+
+
+def add_pool_relative_returns(detail: pd.DataFrame, horizons: list[int]) -> pd.DataFrame:
+    result = detail.copy()
+    for horizon in horizons:
+        return_column = f"未来{horizon}日收益"
+        pool_mean_column = f"同池{horizon}日平均收益"
+        pool_excess_column = f"未来{horizon}日同池超额"
+        returns = pd.to_numeric(result[return_column], errors="coerce")
+        pool_means = returns.groupby(result["回测截面日"]).transform("mean")
+        result[pool_mean_column] = pool_means
+        result[pool_excess_column] = returns - pool_means
+    return result
+
+
+def stock_contribution_ratio(subset: pd.DataFrame, value_column: str) -> float:
+    values = pd.to_numeric(subset[value_column], errors="coerce")
+    contributions = values.groupby(subset["代码"]).sum(min_count=1).abs().dropna()
+    total = contributions.sum()
+    return float(contributions.max() / total) if len(contributions) and total > 0 else np.nan
+
+
+def quality_assessment(
+    *, samples: int, stocks: int, dates: int, contribution: float,
+    mean_return: float, median_return: float, overlapping: bool,
+) -> tuple[str, str]:
+    warnings = []
+    if samples < 100:
+        warnings.append("样本少于100")
+    if stocks < 50:
+        warnings.append("股票少于50只")
+    if dates < 10:
+        warnings.append("截面少于10个")
+    if pd.notna(contribution) and contribution > 0.20:
+        warnings.append("单股绝对贡献超过20%")
+    if pd.notna(mean_return) and pd.notna(median_return) and abs(mean_return - median_return) > 0.10:
+        warnings.append("均值与中位数偏离超过10个百分点")
+    if overlapping:
+        warnings.append("未来收益窗口存在重叠")
+    if any(item in warnings for item in ("样本少于100", "股票少于50只", "截面少于10个")):
+        level = "低"
+    elif warnings:
+        level = "中"
+    else:
+        level = "高"
+    return level, "；".join(warnings) if warnings else "数据质量良好"
+
+
+def summarize(detail: pd.DataFrame, horizons: list[int], *, step: int = 20) -> pd.DataFrame:
     rows = []
     for label in sorted(detail["分类"].dropna().unique()):
         subset = detail[detail["分类"] == label]
         for horizon in horizons:
             returns = pd.to_numeric(subset[f"未来{horizon}日收益"], errors="coerce").dropna()
             excess = pd.to_numeric(subset[f"未来{horizon}日超额"], errors="coerce").dropna()
+            pool_excess_column = f"未来{horizon}日同池超额"
+            pool_excess = pd.to_numeric(subset[pool_excess_column], errors="coerce").dropna()
+            date_excess = (
+                subset.assign(_pool_excess=pd.to_numeric(subset[pool_excess_column], errors="coerce"))
+                .groupby("回测截面日")["_pool_excess"].mean().dropna()
+            )
+            sample_count = int(len(returns))
+            stock_count = int(subset.loc[returns.index, "代码"].nunique()) if sample_count else 0
+            date_count = int(subset.loc[returns.index, "回测截面日"].nunique()) if sample_count else 0
+            mean_return = returns.mean() if sample_count else np.nan
+            median_return = returns.median() if sample_count else np.nan
+            contribution = stock_contribution_ratio(subset.loc[returns.index], pool_excess_column)
+            quality, quality_note = quality_assessment(
+                samples=sample_count,
+                stocks=stock_count,
+                dates=date_count,
+                contribution=contribution,
+                mean_return=mean_return,
+                median_return=median_return,
+                overlapping=step < horizon,
+            )
             rows.append(
                 {
                     "分类": label,
                     "周期": f"{horizon}日",
-                    "样本数": int(len(returns)),
-                    "平均收益": returns.mean() if len(returns) else np.nan,
-                    "中位收益": returns.median() if len(returns) else np.nan,
-                    "上涨胜率": (returns > 0).mean() if len(returns) else np.nan,
+                    "截面间隔": step,
+                    "样本数": sample_count,
+                    "不同股票数": stock_count,
+                    "覆盖截面数": date_count,
+                    "平均收益": mean_return,
+                    "中位收益": median_return,
+                    "10%截尾均值": trimmed_mean(returns),
+                    "上涨胜率": (returns > 0).mean() if sample_count else np.nan,
                     "平均超额": excess.mean() if len(excess) else np.nan,
                     "跑赢基准率": (excess > 0).mean() if len(excess) else np.nan,
+                    "平均同池超额": pool_excess.mean() if len(pool_excess) else np.nan,
+                    "跑赢同池率": (pool_excess > 0).mean() if len(pool_excess) else np.nan,
+                    "截面跑赢同池率": (date_excess > 0).mean() if len(date_excess) else np.nan,
+                    "最差截面同池超额": date_excess.min() if len(date_excess) else np.nan,
+                    "最好截面同池超额": date_excess.max() if len(date_excess) else np.nan,
+                    "最大单股绝对贡献占比": contribution,
+                    "窗口是否重叠": "是" if step < horizon else "否",
+                    "可信度": quality,
+                    "数据质量提示": quality_note,
                 }
             )
     return pd.DataFrame(rows)
@@ -198,7 +289,8 @@ def run_backtest(args) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, int]]:
     detail = pd.DataFrame(records)
     if detail.empty:
         raise RuntimeError("没有生成可回测样本，请检查历史库覆盖范围和参数")
-    return detail, summarize(detail, horizons), stats
+    detail = add_pool_relative_returns(detail, horizons)
+    return detail, summarize(detail, horizons, step=args.step), stats
 
 
 def parse_args(argv=None):

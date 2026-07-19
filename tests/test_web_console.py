@@ -129,10 +129,18 @@ class WebConsoleTests(unittest.TestCase):
     def test_integer_and_boolean_options_are_serialized_safely(self):
         self.assertEqual(safe_task_args(TASKS["rating"], {"workers": 6}), ["--workers", "6"])
         self.assertEqual(safe_task_args(TASKS["research"], {"force": True}), ["--limit", "3", "--force"])
+        self.assertEqual(
+            safe_task_args(TASKS["backtest"], {"step": 60, "horizons": "60, 20,60"}),
+            ["--step", "60", "--horizons", "20,60"],
+        )
 
     def test_integer_options_have_a_bounded_range(self):
         with self.assertRaises(ValueError):
             safe_task_args(TASKS["rating"], {"workers": 1001})
+        with self.assertRaises(ValueError):
+            safe_task_args(TASKS["backtest"], {"step": 0})
+        with self.assertRaises(ValueError):
+            safe_task_args(TASKS["backtest"], {"horizons": "5;whoami"})
 
     def test_dashboard_never_uses_tag_audit_as_primary_output(self):
         path = latest_tag_file()

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>A股研究控制台</title>
-  <link rel="stylesheet" href="/styles.css?v=20260719-3">
+  <link rel="stylesheet" href="/styles.css?v=20260719-4">
   <style>
     .manual-badge{position:relative;z-index:1;min-width:225px;padding:17px 19px;border-radius:14px;border:1px solid rgba(102,224,194,.24);background:rgba(5,24,30,.45)}
     .manual-badge span,.manual-badge b,.manual-badge small{display:block}.manual-badge span{font-size:8px;letter-spacing:.2em;color:var(--mint)}
@@ -20,6 +20,7 @@
     .classification-summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}.classification-summary .count-card{display:flex;justify-content:space-between;align-items:center;padding:11px 13px}.classification-summary .count-card b{font-size:17px;margin:0}.classification-history .table-wrap{max-height:280px}.count-link{border:0;background:transparent;color:var(--mint);padding:0;cursor:pointer;font:inherit;text-decoration:underline;text-decoration-color:rgba(102,224,194,.25);text-underline-offset:3px}.count-link:hover{color:#a5f5df}
     .stock-modal{display:none;position:fixed;inset:0;background:rgba(2,10,15,.72);backdrop-filter:blur(5px);z-index:40;padding:5vh 4vw}.stock-modal.open{display:grid;place-items:center}.stock-dialog{width:min(1180px,100%);max-height:90vh;background:#091d27;border:1px solid rgba(102,224,194,.2);border-radius:18px;padding:22px;box-shadow:0 30px 90px rgba(0,0,0,.5)}.stock-dialog-head{display:flex;justify-content:space-between;align-items:start}.stock-dialog-head h3{margin:5px 0;font-size:20px}.stock-dialog-head span,.stock-list-meta{font-size:9px;color:var(--muted)}.stock-dialog-head button{border:0;background:transparent;color:var(--muted);font-size:25px;cursor:pointer}.stock-list-tools{display:flex;justify-content:space-between;align-items:center;margin:14px 0 10px}.stock-list-tools input{width:280px;border:1px solid var(--line);background:#06151d;color:var(--text);border-radius:8px;padding:9px 11px;font-size:10px}.stock-dialog .table-wrap{max-height:62vh}.sort-head{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;border:0;padding:0;background:transparent;color:inherit;font:inherit;text-align:left;cursor:pointer}.sort-head i{font-style:normal;font-size:8px;color:#58757d}.sort-head:hover,.sort-head.active{color:var(--mint)}.sort-head:hover i,.sort-head.active i{color:var(--mint)}
     .audio-card{display:grid;grid-template-columns:minmax(180px,1fr) minmax(260px,2fr) auto;align-items:center;gap:18px;padding:16px;border:1px solid var(--line);background:rgba(255,255,255,.018);border-radius:12px}.audio-card span,.audio-card b,.audio-card small{display:block}.audio-card span{font-size:8px;color:var(--mint);letter-spacing:.14em}.audio-card b{font-size:11px;margin:6px 0;overflow-wrap:anywhere}.audio-card small{font-size:8px;color:var(--muted)}.audio-card audio{width:100%;height:38px}.audio-card a{font-size:9px;color:var(--mint);text-decoration:none;white-space:nowrap}.audio-output .audio-card{grid-template-columns:1fr;padding:0;border:0;background:transparent}.audio-output .audio-card>div>span{display:none}.audio-panel{background:linear-gradient(120deg,rgba(12,32,43,.9),rgba(20,52,58,.72))}
+    .task-card input[type=text]{width:82px;border:1px solid var(--line);background:#081923;color:var(--text);padding:6px;border-radius:6px;font-size:9px}.task-card footer{flex-wrap:wrap}
     @media(max-width:700px){.manual-badge{margin-top:25px;width:100%}.audio-card{grid-template-columns:1fr}}
   </style>
 </head>
@@ -81,6 +82,6 @@
   </aside>
   <div class="toast" id="toast"></div>
   <div class="stock-modal" id="stock-modal"><div class="stock-dialog"><div class="stock-dialog-head"><div><span>STOCK LIST</span><h3 id="stock-list-title">股票明细</h3><div id="stock-list-subtitle"></div></div><button id="close-stock-list">×</button></div><div class="stock-list-tools"><div class="stock-list-meta" id="stock-list-meta"></div><input id="stock-list-search" type="search" placeholder="搜索代码、名称或行业"></div><div class="table-wrap"><table id="stock-list-table"><thead></thead><tbody></tbody></table></div></div></div>
-  <script src="/app.js?v=20260719-3"></script>
+  <script src="/app.js?v=20260719-4"></script>
 </body>
 </html>

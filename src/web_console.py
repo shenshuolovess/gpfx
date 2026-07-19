@@ -59,8 +59,8 @@ TASKS: dict[str, TaskDefinition] = {
     "stock_pages": TaskDefinition("股票页面", "批量生成全部股票专属研究页面", "generate_stock_page.py", "结果生成", base_args=("--all",)),
     "company_data": TaskDefinition("公司财务", "更新公司概况与最新财务快照", "fetch_company_financials.py", "数据更新", True, allowed={"workers": ("--workers", "int"), "force": ("--force", "bool")}),
     "research": TaskDefinition("最新研报", "更新最近三份公开研报并复用已有正文", "fetch_stock_research.py", "数据更新", True, base_args=("--limit", "3"), allowed={"workers": ("--workers", "int"), "force": ("--force", "bool")}),
-    "backtest": TaskDefinition("分类回测", "运行分类边界的简单历史回测", "backtest_classification.py", "规则验证", allowed={"max_stocks": ("--max-stocks", "int"), "snapshots": ("--snapshots", "int")}),
-    "compare_rules": TaskDefinition("规则对比", "比较当前基线与候选分类规则", "compare_classification_rules.py", "规则验证", allowed={"max_stocks": ("--max-stocks", "int"), "snapshots": ("--snapshots", "int")}),
+    "backtest": TaskDefinition("分类回测", "运行分类边界的稳健历史回测", "backtest_classification.py", "规则验证", allowed={"max_stocks": ("--max-stocks", "int"), "snapshots": ("--snapshots", "int"), "step": ("--step", "positive_int"), "horizons": ("--horizons", "horizons")}),
+    "compare_rules": TaskDefinition("规则对比", "比较当前基线与候选分类规则", "compare_classification_rules.py", "规则验证", allowed={"max_stocks": ("--max-stocks", "int"), "snapshots": ("--snapshots", "int"), "step": ("--step", "positive_int"), "horizons": ("--horizons", "horizons")}),
     "maintenance": TaskDefinition("维护预览", "预览过期缓存和日志，不执行删除", "maintenance.py", "系统维护"),
 }
 
@@ -84,11 +84,20 @@ def safe_task_args(task: TaskDefinition, options: dict[str, Any]) -> list[str]:
         if kind == "bool":
             if bool(value):
                 result.append(flag)
-        elif kind == "int":
+        elif kind in {"int", "positive_int"}:
             number = int(value)
-            if number < 0 or number > 1000:
-                raise ValueError(f"{name} 超出允许范围 0—1000")
+            minimum = 1 if kind == "positive_int" else 0
+            if number < minimum or number > 1000:
+                raise ValueError(f"{name} 超出允许范围 {minimum}—1000")
             result.extend([flag, str(number)])
+        elif kind == "horizons":
+            text = str(value or "").strip()
+            if not re.fullmatch(r"\d+(?:\s*,\s*\d+)*", text):
+                raise ValueError("horizons 必须是逗号分隔的正整数")
+            horizons = sorted({int(item.strip()) for item in text.split(",")})
+            if not horizons or any(item <= 0 or item > 1000 for item in horizons):
+                raise ValueError("horizons 必须位于1—1000")
+            result.extend([flag, ",".join(map(str, horizons))])
     return result
 
 

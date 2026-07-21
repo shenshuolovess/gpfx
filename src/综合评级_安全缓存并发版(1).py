@@ -58,6 +58,8 @@ DATE_TAG = None
 
 # 基准指数：沪深300
 BENCHMARK_CODE = "sh.000300"
+DAILY_BAR_FIELDS = "date,open,high,low,close,volume,amount"
+REQUIRED_DAILY_BAR_COLUMNS = {"date", "open", "high", "low", "close", "volume"}
 
 # 向前回溯多少自然日，保证能算 MA200 / ADX / Donchian / RS
 LOOKBACK_DAYS = 550
@@ -358,6 +360,24 @@ def fetch_bs_data(
     raise RuntimeError(f"{code} 行情获取失败：{last_err}")
 
 
+def fetch_benchmark_data(start_date: str, end_date: str) -> pd.DataFrame:
+    """获取可同时用于相对强弱和市场环境计算的完整沪深300日线。"""
+    frame = fetch_bs_data(
+        BENCHMARK_CODE,
+        DAILY_BAR_FIELDS,
+        start_date,
+        end_date,
+        adjustflag="3",
+    )
+    if frame.empty:
+        raise RuntimeError("获取沪深300指数失败，无法计算 Relative Strength 和市场环境")
+
+    missing = sorted(REQUIRED_DAILY_BAR_COLUMNS.difference(frame.columns))
+    if missing:
+        raise RuntimeError(f"沪深300行情缺少必要字段：{missing}")
+    return frame
+
+
 
 
 def cache_file_path(bs_code: str, start_date: str, end_date: str, adjustflag: str) -> str:
@@ -395,7 +415,7 @@ def fetch_stock_data_cached(
 
     df = fetch_bs_data(
         bs_code,
-        "date,open,high,low,close,volume,amount",
+        DAILY_BAR_FIELDS,
         start_date,
         end_date,
         adjustflag="2",
@@ -915,7 +935,7 @@ def analyze_one_stock_inner(
 
     hist = fetch_bs_data(
         bs_code,
-        "date,open,high,low,close,volume,amount",
+        DAILY_BAR_FIELDS,
         start_date,
         end_date,
         adjustflag="2",
@@ -1560,16 +1580,7 @@ def main(argv=None):
 
         print("[初始化] 正在获取基准指数（沪深300）...")
 
-        bench_df = fetch_bs_data(
-            BENCHMARK_CODE,
-            "date,close",
-            START_DATE,
-            END_DATE,
-            adjustflag="3",
-        )
-
-        if bench_df.empty:
-            raise RuntimeError("获取沪深300指数失败，无法计算 Relative Strength")
+        bench_df = fetch_benchmark_data(START_DATE, END_DATE)
 
         merge_history(
             HISTORY_DIR,

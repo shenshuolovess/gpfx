@@ -48,6 +48,38 @@ class WebConsoleTests(unittest.TestCase):
         self.assertEqual(task.script, "拉取知识星球.py")
         self.assertTrue(task.network)
         self.assertIn("--auto-start", task.base_args)
+        self.assertIn("执行当天", task.description)
+        source = (PROJECT_ROOT / "src" / "拉取知识星球.py").read_text(encoding="utf-8")
+        self.assertIn('default=datetime.now().strftime("%Y-%m-%d")', source)
+
+    def test_clearance_analysis_is_available_from_workbench(self):
+        task = TASKS["clearance"]
+        self.assertEqual(task.script, "清仓分析.py")
+        self.assertTrue(task.network)
+        script = (PROJECT_ROOT / "src" / "web_ui" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("'clearance'", script)
+
+        source = (PROJECT_ROOT / "src" / "清仓分析.py").read_text(encoding="utf-8")
+        self.assertIn("进度：100%", source)
+
+    def test_tuitui_task_is_a_single_continuous_monitor(self):
+        task = TASKS["tuitui"]
+        self.assertEqual(task.script, "推推.py")
+        self.assertEqual(task.base_args, ())
+        self.assertEqual(task.allowed["interval"], ("--interval", "positive_int"))
+        self.assertEqual(safe_task_args(task, {"interval": 300}), ["--interval", "300"])
+        self.assertTrue(task.network)
+        script = (PROJECT_ROOT / "src" / "web_ui" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("'tuitui'", script)
+        self.assertIn("开始持续监控", script)
+        self.assertIn("终止监控", script)
+
+        manager = JobManager()
+        manager.jobs["active-monitor"] = {
+            "id": "active-monitor", "task_id": "tuitui", "status": "running"
+        }
+        with self.assertRaisesRegex(ValueError, "已经在运行"):
+            manager.start("tuitui", {"interval": 300})
 
     def test_tts_task_and_audio_player_are_registered(self):
         task = TASKS["tts"]
@@ -118,7 +150,11 @@ class WebConsoleTests(unittest.TestCase):
 
     def test_dashboard_includes_latest_ranking_workbook(self):
         ranking = dashboard_status()["files"]["ranking"]
-        self.assertEqual(ranking["name"], "top200_stocks_20260720.xlsx")
+        expected = max(
+            (PROJECT_ROOT / "data" / "input").glob("top200_stocks_*.xlsx"),
+            key=lambda path: path.name,
+        )
+        self.assertEqual(ranking["name"], expected.name)
 
     def test_top200_generator_is_the_first_daily_task(self):
         task = TASKS["generate_top200"]
@@ -153,6 +189,29 @@ class WebConsoleTests(unittest.TestCase):
         html = (PROJECT_ROOT / "src" / "web_ui" / "index.html").read_text(encoding="utf-8")
         self.assertRegex(html, r"/app\.js\?v=[0-9-]+")
         self.assertRegex(html, r"/styles\.css\?v=[0-9-]+")
+        self.assertRegex(html, r"/layout\.css\?v=[0-9-]+")
+        self.assertRegex(html, r"/dashboard-charts\.js\?v=[0-9-]+")
+
+    def test_dashboard_has_offline_line_and_donut_charts(self):
+        html = (PROJECT_ROOT / "src" / "web_ui" / "index.html").read_text(encoding="utf-8")
+        charts = (PROJECT_ROOT / "src" / "web_ui" / "dashboard-charts.js").read_text(encoding="utf-8")
+        layout = (PROJECT_ROOT / "src" / "web_ui" / "layout.css").read_text(encoding="utf-8")
+        self.assertIn('id="classification-trend-chart"', html)
+        self.assertIn('id="classification-donut-chart"', html)
+        self.assertIn('id="target-trend-chart"', html)
+        self.assertIn("renderDashboardLineChart", charts)
+        self.assertIn("renderClassificationDonut", charts)
+        self.assertIn("attachChartTooltips", charts)
+        self.assertIn("data-chart-tooltip", charts)
+        self.assertIn(".chart-tooltip", layout)
+        self.assertNotIn("https://", charts)
+
+    def test_dashboard_layout_prevents_page_level_horizontal_overflow(self):
+        layout = (PROJECT_ROOT / "src" / "web_ui" / "layout.css").read_text(encoding="utf-8")
+        self.assertIn("grid-template-columns: 238px minmax(0, 1fr)", layout)
+        self.assertIn("overflow-x: hidden", layout)
+        self.assertIn(".table-wrap", layout)
+        self.assertIn("overflow: auto", layout)
 
     def test_task_registry_uses_python_scripts_without_shell_commands(self):
         self.assertEqual(next(iter(TASKS)), "generate_top200")

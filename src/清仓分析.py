@@ -249,6 +249,12 @@ def fetch_price_from_sina(codes, use_system_proxy=True):
                 f"新浪行情：本批获取失败，股票代码：{batch_codes}，错误：{repr(last_error)}"
             )
 
+        completed = min(start + len(batch_codes), len(clean_codes))
+        progress = 5 + round(25 * completed / len(clean_codes))
+        logging.info(
+            f"进度：{progress}%（现价已处理 {completed} 只，共 {len(clean_codes)} 只）"
+        )
+
     return result
 
 
@@ -412,7 +418,8 @@ def fetch_200_day_high_map(codes):
     if not clean_codes:
         return {}
 
-    for code in clean_codes:
+    total = len(clean_codes)
+    for position, code in enumerate(clean_codes, start=1):
         high_price = fetch_200_day_high_one(code, use_system_proxy=True)
 
         if high_price is None:
@@ -421,6 +428,11 @@ def fetch_200_day_high_map(codes):
 
         if high_price is not None:
             result[code] = high_price
+
+        progress = 30 + round(45 * position / total)
+        logging.info(
+            f"进度：{progress}%（近200日高点已处理 {position} 只，共 {total} 只）"
+        )
 
         time.sleep(0.2)
 
@@ -512,6 +524,7 @@ def main(argv=None):
 
     logging.info(f"读取完成，共 {len(df)} 行")
     logging.info(f"字段列表：{list(df.columns)}")
+    logging.info("进度：5%（输入文件读取完成）")
 
     for col in [CODE_COL, CLEAR_PRICE_COL]:
         if col not in df.columns:
@@ -543,18 +556,25 @@ def main(argv=None):
     price_map = fetch_price_map(codes)
 
     logging.info(f"现价获取完成，成功获取：{len(price_map)} 只")
+    logging.info("进度：30%（现价获取阶段完成）")
 
     logging.info(f"准备获取近200日最高价，股票数量：{len(codes)}")
 
     high_200_map = fetch_200_day_high_map(codes)
 
     logging.info(f"近200日最高价获取完成，成功获取：{len(high_200_map)} 只")
+    logging.info("进度：75%（近200日高点获取阶段完成）")
 
     success_count = 0
     fail_codes = []
 
     # 重点：按原始 df 顺序逐行回填，不排序
-    for idx, row in df.iterrows():
+    total_rows = len(df)
+    for position, (idx, row) in enumerate(df.iterrows(), start=1):
+        progress = 75 + round(20 * position / max(total_rows, 1))
+        logging.info(
+            f"进度：{progress}%（结果已计算 {position} 行，共 {total_rows} 行）"
+        )
         raw_code = row[CODE_COL]
         code = row["_标准代码"]
 
@@ -625,6 +645,8 @@ def main(argv=None):
         errors="coerce"
     )
 
+    logging.info("进度：98%（正在写入并格式化 Excel）")
+
     try:
         df.to_excel(output_file, index=False)
     except PermissionError:
@@ -643,6 +665,7 @@ def main(argv=None):
         logging.info(f"处理完成：{backup_file}")
         logging.info(f"成功计算：{success_count} 只")
         logging.info(f"失败数量：{len(fail_codes)} 只")
+        logging.info("进度：100%（处理完成）")
 
         if fail_codes:
             logging.warning("失败代码如下：")
@@ -657,6 +680,7 @@ def main(argv=None):
     logging.info(f"处理完成：{output_file}")
     logging.info(f"成功计算：{success_count} 只")
     logging.info(f"失败数量：{len(fail_codes)} 只")
+    logging.info("进度：100%（处理完成）")
 
     if fail_codes:
         logging.warning("失败代码如下：")

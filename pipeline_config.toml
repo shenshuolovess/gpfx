@@ -17,7 +17,7 @@ chromedriver = "src/bin/chromedriver.exe"
 workers = 6
 
 [monitor]
-interval_seconds = 800
+interval_seconds = 300
 headless = false
 
 [logging]

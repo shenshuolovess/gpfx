@@ -22,7 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from pipeline_config import PROJECT_DIR, config_value, project_path, resolve_input
-from stock_utils import latest_matching_file, read_csv_auto
+from stock_utils import extract_date_tag, latest_matching_file, read_csv_auto
 
 
 STATIC_DIR = Path(__file__).with_name("web_ui")
@@ -49,12 +49,14 @@ class TaskDefinition:
 TASKS: dict[str, TaskDefinition] = {
     "generate_top200": TaskDefinition("生成Top200选股明细", "通过JQData生成最新选股明细Excel和行业ZIP", "generate_top200_jqdata.py", "每日准备", True, allowed={"date": ("--date", "date"), "limit": ("--limit", "stock_limit"), "skip_institutions": ("--skip-institutions", "bool")}),
     "calculate_targets": TaskDefinition("计算标的", "从最新选股明细生成强势、近期新高和历史新高三类标的", "计算标的.py", "每日准备"),
-    "zsxq": TaskDefinition("拉取知识星球", "打开浏览器，登录后自动抓取上一个交易日的文字观点", "拉取知识星球.py", "每日准备", True, base_args=("--auto-start",)),
+    "clearance": TaskDefinition("清仓分析", "更新清仓股票现价、清仓后涨幅与近200日高点回撤", "清仓分析.py", "每日准备", True),
+    "zsxq": TaskDefinition("拉取知识星球", "打开浏览器，登录后自动抓取截至执行当天的文字观点", "拉取知识星球.py", "每日准备", True, base_args=("--auto-start",)),
     "tts": TaskDefinition("知识星球转语音", "自动选择最新知识星球文本，生成可在页面播放的语音", "转语音.py", "每日准备", True),
     "below_ma200": TaskDefinition("低于200日线", "读取最新选股明细，筛出位于200日均线下方的股票", "低于200日(新版).py", "每日准备"),
     "rating": TaskDefinition("综合评级", "更新行情并生成最新分类总表", "综合评级_安全缓存并发版(1).py", "核心分析", True, allowed={"workers": ("--workers", "int")}),
     "filter_ma20": TaskDefinition("20日均线附近", "筛选震荡上行、上升、赶顶且位于20日均线附近的股票", "filter_zd_up_ma20.py", "每日筛选"),
     "filter_ma200": TaskDefinition("200日均线附近", "筛选震荡上行、上升、赶顶且位于200日均线上方附近的股票", "filter_zd_up_ma200.py", "每日筛选"),
+    "tuitui": TaskDefinition("推推持续监控", "无需浏览器，每5分钟用实时价量和本地历史即时重算趋势", "推推.py", "每日筛选", True, allowed={"interval": ("--interval", "positive_int")}),
     "tags": TaskDefinition("产业标签", "生成每只股票最多三个细分产业标签", "stock_industry_tags.py", "核心分析", allowed={"offline": ("--offline", "bool"), "refresh": ("--refresh", "bool")}),
     "daily_brief": TaskDefinition("市场日报", "生成行业与标签红黑榜及市场总结", "daily_market_brief.py", "结果生成", base_args=("--no-llm",)),
     "stock_pages": TaskDefinition("股票页面", "批量生成全部股票专属研究页面", "generate_stock_page.py", "结果生成", base_args=("--all",)),
@@ -190,6 +192,11 @@ class JobManager:
             "cancel_requested": False,
         }
         with self.lock:
+            if task_id == "tuitui" and any(
+                existing["task_id"] == task_id and existing["status"] in {"queued", "running"}
+                for existing in self.jobs.values()
+            ):
+                raise ValueError("推推持续监控已经在运行，请先终止现有监控")
             self.jobs[job_id] = job
         threading.Thread(target=self._run, args=(job_id, command), daemon=True).start()
         return self.public(job)
@@ -315,6 +322,7 @@ def dashboard_status() -> dict[str, Any]:
     tags = latest_tag_file()
     zsxq = latest_optional("data/output/zsxq_*.txt")
     zsxq_audio = latest_zsxq_audio()
+    tuitui = latest_optional("data/output/推推_*.csv")
     research = latest_optional("data/history/research_reports/eastmoney_stock_reports_*.json")
     financial = latest_optional("data/history/company_financials/eastmoney_company_financials_*.json")
     try:
@@ -331,6 +339,7 @@ def dashboard_status() -> dict[str, Any]:
             "stock_pool": file_info(pool_path), "ranking": file_info(ranking_path),
             "classification": file_info(classification),
             "tags": file_info(tags), "zsxq": file_info(zsxq), "zsxq_audio": file_info(zsxq_audio),
+            "tuitui": file_info(tuitui),
             "research": file_info(research), "financial": file_info(financial),
         },
     }
@@ -344,6 +353,7 @@ def output_items() -> list[dict[str, Any]]:
         ("低于200日线", OUTPUT_DIR / "沪深_低于200日线.csv"),
         ("20日均线附近", latest_optional("data/output/震荡上行_上升_赶顶_20日均线附近_*.csv")),
         ("200日均线附近", latest_optional("data/output/震荡上行_上升_赶顶_200日均线附近_*.csv")),
+        ("推推盘中筛选", latest_optional("data/output/推推_*.csv")),
         ("股票页面", OUTPUT_DIR / "stock_pages" / "index.html"),
         ("市场日报", latest_optional("data/output/daily_briefs/*.html")),
         ("分类总表", latest_optional(str(config_value("files", "classification_pattern")))),
@@ -529,13 +539,31 @@ def history_coverage_preview() -> dict[str, Any]:
 def target_count_history_preview() -> dict[str, Any]:
     path = project_path(config_value("files", "target_count_history", "data/output/计算标的数量历史.csv"))
     columns = ["日期", "强势数量", "近期新高数量", "历史新高数量"]
-    if not path.exists():
-        return {"file": file_info(None), "columns": columns, "rows": [], "total": 0, "latest": {}}
-    frame = read_csv_auto(path, dtype={"日期": str}).fillna("").reindex(columns=columns)
+    frame = (
+        read_csv_auto(path, dtype={"日期": str}).fillna("").reindex(columns=columns)
+        if path.exists() else pd.DataFrame(columns=columns)
+    )
+    records = {str(row["日期"]): row.to_dict() for _, row in frame.iterrows()}
+    target_dir = project_path(config_value("files", "target_output_dir", "data/output/计算标的"))
+    dated_files: dict[str, dict[str, Path]] = {}
+    for name in TARGET_NAMES:
+        for candidate in target_dir.glob(f"{name}_*.csv"):
+            tag = extract_date_tag(candidate)
+            if tag:
+                date_text = f"{tag[:4]}-{tag[4:6]}-{tag[6:]}"
+                dated_files.setdefault(date_text, {})[name] = candidate
+    for date_text, files in dated_files.items():
+        if date_text in records:
+            continue
+        records[date_text] = {"日期": date_text, **{
+            f"{name}数量": len(read_csv_auto(files[name], dtype=str)) if name in files else 0
+            for name in TARGET_NAMES
+        }}
+    frame = pd.DataFrame(records.values(), columns=columns)
     frame = frame.sort_values("日期", ascending=False)
     rows = frame.astype(str).to_dict(orient="records")
     return {
-        "file": file_info(path), "columns": columns, "rows": rows,
+        "file": file_info(path if path.exists() else None), "columns": columns, "rows": rows,
         "total": len(rows), "latest": rows[0] if rows else {},
     }
 
@@ -543,13 +571,30 @@ def target_count_history_preview() -> dict[str, Any]:
 def classification_count_history_preview() -> dict[str, Any]:
     path = project_path(config_value("files", "classification_count_history", "data/output/分类数量历史.csv"))
     columns = ["日期", *[f"{name}数量" for name in CLASSIFICATION_NAMES]]
-    if not path.exists():
-        return {"file": file_info(None), "columns": columns, "rows": [], "total": 0, "latest": {}}
-    frame = read_csv_auto(path, dtype={"日期": str}).fillna("").reindex(columns=columns)
+    frame = (
+        read_csv_auto(path, dtype={"日期": str}).fillna("").reindex(columns=columns)
+        if path.exists() else pd.DataFrame(columns=columns)
+    )
+    records = {str(row["日期"]): row.to_dict() for _, row in frame.iterrows()}
+    pattern = str(config_value("files", "classification_pattern"))
+    for candidate in PROJECT_DIR.glob(pattern):
+        tag = extract_date_tag(candidate)
+        if not tag:
+            continue
+        date_text = f"{tag[:4]}-{tag[4:6]}-{tag[6:]}"
+        if date_text in records:
+            continue
+        source = read_csv_auto(candidate, dtype=str)
+        counts = source["分类"].value_counts() if "分类" in source.columns else pd.Series(dtype=int)
+        records[date_text] = {
+            "日期": date_text,
+            **{f"{name}数量": int(counts.get(name, 0)) for name in CLASSIFICATION_NAMES},
+        }
+    frame = pd.DataFrame(records.values(), columns=columns)
     frame = frame.sort_values("日期", ascending=False)
     rows = frame.astype(str).to_dict(orient="records")
     return {
-        "file": file_info(path), "columns": columns, "rows": rows,
+        "file": file_info(path if path.exists() else None), "columns": columns, "rows": rows,
         "total": len(rows), "latest": rows[0] if rows else {},
     }
 
@@ -666,7 +711,7 @@ app = FastAPI(title="A股研究控制台", version="0.1.0")
 async def disable_ui_cache(request, call_next):
     response = await call_next(request)
     if request.url.path in {
-        "/", "/index.html", "/app.js", "/styles.css", "/migration.js",
+        "/", "/index.html", "/app.js", "/dashboard-charts.js", "/styles.css", "/layout.css", "/migration.js",
         "/migration.css", "/opportunity.js", "/factor-validation.js", "/history.js"
     }:
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"

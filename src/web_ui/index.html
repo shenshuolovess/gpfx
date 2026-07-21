@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>A股研究控制台</title>
   <link rel="stylesheet" href="/styles.css?v=20260719-5">
+  <link rel="stylesheet" href="/layout.css?v=20260719-2">
   <link rel="stylesheet" href="/migration.css?v=20260719-1">
   <style>
     .manual-badge{position:relative;z-index:1;min-width:225px;padding:17px 19px;border-radius:14px;border:1px solid rgba(102,224,194,.24);background:rgba(5,24,30,.45)}
@@ -51,6 +52,11 @@
 
         <div class="stats" id="stats"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
 
+        <div class="insight-grid">
+          <section class="panel chart-panel chart-panel-wide"><div class="panel-head"><div><span>MARKET BREADTH</span><h3>分类趋势宽度</h3></div><small id="breadth-chart-date">等待数据</small></div><div class="chart-host" id="classification-trend-chart"><div class="chart-empty">正在读取分类历史…</div></div></section>
+          <section class="panel chart-panel"><div class="panel-head"><div><span>LATEST STRUCTURE</span><h3>最新分类结构</h3></div><small id="donut-chart-date">等待数据</small></div><div class="chart-host chart-host-donut" id="classification-donut-chart"><div class="chart-empty">正在读取分类数据…</div></div></section>
+        </div>
+
         <div class="layout">
           <section class="panel"><div class="panel-head"><div><span>QUICK ACTIONS</span><h3>常用操作</h3></div><button class="text-btn" data-view-link="tasks">全部任务 →</button></div><div class="quick-actions" id="quick-actions"></div></section>
           <section class="panel activity"><div class="panel-head"><div><span>LIVE ACTIVITY</span><h3>最近任务</h3></div><i class="live-dot"></i></div><div id="recent-jobs" class="empty">还没有运行任务</div></section>
@@ -58,7 +64,7 @@
 
         <section class="panel data-panel"><div class="panel-head"><div><span>DATA READINESS</span><h3>数据就绪情况</h3></div><button class="refresh" id="refresh">刷新</button></div><div class="file-grid" id="file-grid"></div></section>
         <section class="panel audio-panel"><div class="panel-head"><div><span>ZSXQ AUDIO</span><h3>知识星球语音</h3></div><button class="refresh" onclick="loadStatus();loadOutputs()">刷新音频</button></div><div id="latest-audio"></div></section>
-        <section class="panel target-history"><div class="panel-head"><div><span>TARGET COUNTS</span><h3>计算标的数量历史 <small id="target-date"></small></h3></div><button class="refresh" id="refresh-targets">刷新数据</button></div><div class="target-summary"><button class="count-card" onclick="openStockList('target','强势')"><span>强势</span><b id="strong-count">—</b></button><button class="count-card" onclick="openStockList('target','近期新高')"><span>近期新高</span><b id="recent-high-count">—</b></button><button class="count-card" onclick="openStockList('target','历史新高')"><span>历史新高</span><b id="history-high-count">—</b></button></div><div class="table-note" id="target-note"></div><div class="table-wrap"><table><thead><tr><th>日期</th><th>强势数量</th><th>近期新高数量</th><th>历史新高数量</th></tr></thead><tbody id="target-history-body"></tbody></table></div></section>
+        <section class="panel target-history"><div class="panel-head"><div><span>TARGET COUNTS</span><h3>计算标的数量历史 <small id="target-date"></small></h3></div><button class="refresh" id="refresh-targets">刷新数据</button></div><div class="target-summary"><button class="count-card" onclick="openStockList('target','强势')"><span>强势</span><b id="strong-count">—</b></button><button class="count-card" onclick="openStockList('target','近期新高')"><span>近期新高</span><b id="recent-high-count">—</b></button><button class="count-card" onclick="openStockList('target','历史新高')"><span>历史新高</span><b id="history-high-count">—</b></button></div><div class="chart-host chart-host-compact" id="target-trend-chart"><div class="chart-empty">正在读取标的历史…</div></div><div class="table-note" id="target-note"></div><div class="table-wrap"><table><thead><tr><th>日期</th><th>强势数量</th><th>近期新高数量</th><th>历史新高数量</th></tr></thead><tbody id="target-history-body"></tbody></table></div></section>
         <section class="panel classification-history"><div class="panel-head"><div><span>CLASSIFICATION COUNTS</span><h3>九种分类数量历史 <small id="classification-date"></small></h3></div><button class="refresh" id="refresh-classifications">刷新数据</button></div><div class="classification-summary" id="classification-summary"></div><div class="table-note" id="classification-note"></div><div class="table-wrap"><table><thead id="classification-history-head"></thead><tbody id="classification-history-body"></tbody></table></div></section>
         <section class="panel preview-panel"><div class="panel-head"><div><span>OPPORTUNITY SCORE</span><h3>机会评分榜单 <small id="opportunity-count"></small></h3></div><div class="table-tools"><input id="opportunity-search" type="search" placeholder="搜索代码、名称、分类或行业"><button class="refresh" id="refresh-opportunity">刷新数据</button></div></div><div class="table-note" id="opportunity-note"></div><div class="table-wrap"><table id="opportunity-table"><thead></thead><tbody></tbody></table></div></section>
         <section class="panel preview-panel"><div class="panel-head"><div><span>FACTOR WALK-FORWARD</span><h3>机会因子滚动验证 <small id="factor-months"></small></h3></div><button class="refresh" id="refresh-factors">刷新数据</button></div><div class="target-summary" id="factor-summary-cards"></div><div class="table-note" id="factor-note"></div><div class="table-wrap"><table id="factor-summary-table"><thead></thead><tbody></tbody></table></div><div class="panel-head"><div><h3>逐月选择记录</h3></div><div class="table-tools"><select id="factor-horizon"><option value="全部">全部周期</option><option value="5日">5日</option><option value="20日">20日</option><option value="60日">60日</option></select></div></div><div class="table-wrap"><table id="factor-monthly-table"><thead></thead><tbody></tbody></table></div></section>
@@ -98,7 +104,8 @@
   </aside>
   <div class="toast" id="toast"></div>
   <div class="stock-modal" id="stock-modal"><div class="stock-dialog"><div class="stock-dialog-head"><div><span>STOCK LIST</span><h3 id="stock-list-title">股票明细</h3><div id="stock-list-subtitle"></div></div><button id="close-stock-list">×</button></div><div class="stock-list-tools"><div class="stock-list-meta" id="stock-list-meta"></div><input id="stock-list-search" type="search" placeholder="搜索代码、名称或行业"></div><div class="table-wrap"><table id="stock-list-table"><thead></thead><tbody></tbody></table></div></div></div>
-  <script src="/app.js?v=20260719-7"></script>
+  <script src="/dashboard-charts.js?v=20260721-3"></script>
+  <script src="/app.js?v=20260721-1"></script>
   <script src="/migration.js?v=20260719-1"></script>
   <script src="/opportunity.js?v=20260719-1"></script>
   <script src="/factor-validation.js?v=20260719-1"></script>
